@@ -13,19 +13,41 @@ import { useQueueStore } from "@/stores/queue.store";
 export interface PlaybackController {
   /**
    * Replaces the queue with `tracks` and starts playing `tracks[0]`.
-   * If `tracks` is empty this is a no-op.
+   * Useful when callers don't have an obvious start index (e.g. flat
+   * "play all" actions).
    */
   playTracks: (tracks: Track[]) => Promise<void>;
 
   /**
-   * Appends `track` to the queue without changing the current cursor.
-   */
-  enqueue: (track: Track) => void;
-
-  /**
-   * Loads `track` into the queue as the only entry and starts playback.
+   * Sets `track` as a single-entry queue and starts playing it. Kept for
+   * contexts where there is no natural continuation — isolated search
+   * results, the fullscreen "play this" button, etc.
    */
   playTrack: (track: Track) => Promise<void>;
+
+  /**
+   * Contextual playback. Replaces the queue with `tracks`, starts at
+   * `startIndex` and plays that track. This is what Album, Artist,
+   * Playlist and most list-style sources use so that Next/Previous flow
+   * naturally through the surrounding tracks.
+   */
+  playQueue: (tracks: Track[], startIndex: number) => Promise<void>;
+
+  /**
+   * Jumps to the track at the given index in the current queue and
+   * starts playing it. Used by the Queue drawer when the user clicks a
+   * row that is not the current one.
+   */
+  playQueueIndex: (index: number) => Promise<void>;
+
+  /** Appends a single track to the end of the queue. */
+  enqueue: (track: Track) => void;
+
+  /** Removes a track from the queue by its index. */
+  removeFromQueue: (index: number) => void;
+
+  /** Empties the queue and stops playback. */
+  clearQueue: () => Promise<void>;
 
   /** Toggles between `playing` and `paused` for the current track. */
   togglePlay: () => Promise<void>;
@@ -47,6 +69,18 @@ export interface PlaybackController {
 
   /** Sets the player volume (0..1). */
   setVolume: (volume: number) => Promise<void>;
+}
+
+/**
+ * Internal helper. Centralises the synchronous pre-flight state changes
+ * (track, position, duration, status -> loading) so the public methods
+ * stay short and the error path is consistent.
+ */
+function prepareForTrack(track: Track): void {
+  usePlayerStore.getState().setCurrentTrack(track);
+  usePlayerStore.getState().setPosition(0);
+  usePlayerStore.getState().setDuration(track.duration);
+  usePlayerStore.getState().setStatus("loading");
 }
 
 /**
@@ -74,23 +108,28 @@ export function usePlayback(): PlaybackController {
   const setDuration = usePlayerStore((state) => state.setDuration);
   const setVolumeState = usePlayerStore((state) => state.setVolume);
 
-  const enqueue = useQueueStore((state) => state.enqueue);
+  const enqueueQueue = useQueueStore((state) => state.enqueue);
   const appendTrack = useQueueStore((state) => state.append);
   const moveNext = useQueueStore((state) => state.moveNext);
   const movePrevious = useQueueStore((state) => state.movePrevious);
-  const clear = useQueueStore((state) => state.clear);
+  const removeAt = useQueueStore((state) => state.removeAt);
+  const clearQueueStore = useQueueStore((state) => state.clear);
   const getCurrentTrack = useQueueStore((state) => state.getCurrentTrack);
 
   const playTrack = useCallback(
     async (track: Track) => {
-      enqueue([track]);
-      setCurrentTrack(track);
-      setPosition(0);
-      setDuration(track.duration);
-      await provider.play(track);
-      setStatus("playing");
+      enqueueQueue([track]);
+      prepareForTrack(track);
+      try {
+        await provider.play(track);
+        setStatus("playing");
+      } catch (err) {
+        setStatus("error");
+        // Surface the failure in the dev console without throwing.
+        console.error("playback.playTrack failed", err);
+      }
     },
-    [enqueue, setCurrentTrack, setDuration, setPosition, setStatus, provider],
+    [enqueueQueue, setStatus, provider],
   );
 
   const playTracks = useCallback(
@@ -98,15 +137,46 @@ export function usePlayback(): PlaybackController {
       if (tracks.length === 0) {
         return;
       }
-      const first = tracks[0]!;
-      enqueue(tracks);
-      setCurrentTrack(first);
-      setPosition(0);
-      setDuration(first.duration);
-      await provider.play(first);
-      setStatus("playing");
+      await playTrackInternal(tracks, 0, {
+        enqueueQueue,
+        provider,
+        setStatus,
+      });
     },
-    [enqueue, setCurrentTrack, setDuration, setPosition, setStatus, provider],
+    [enqueueQueue, provider, setStatus],
+  );
+
+  const playQueue = useCallback(
+    async (tracks: Track[], startIndex: number) => {
+      if (tracks.length === 0) {
+        return;
+      }
+      const safeIndex = Math.min(Math.max(0, startIndex), tracks.length - 1);
+      await playTrackInternal(tracks, safeIndex, {
+        enqueueQueue,
+        provider,
+        setStatus,
+      });
+    },
+    [enqueueQueue, provider, setStatus],
+  );
+
+  const playQueueIndex = useCallback(
+    async (index: number) => {
+      const track = useQueueStore.getState().tracks[index];
+      if (!track) {
+        return;
+      }
+      prepareForTrack(track);
+      try {
+        await provider.play(track);
+        setStatus("playing");
+      } catch (err) {
+        setStatus("error");
+        console.error("playback.playQueueIndex failed", err);
+      }
+    },
+    [provider, setStatus],
   );
 
   const enqueueTrack = useCallback(
@@ -116,28 +186,61 @@ export function usePlayback(): PlaybackController {
     [appendTrack],
   );
 
+  const removeFromQueue = useCallback(
+    (index: number) => {
+      removeAt(index);
+    },
+    [removeAt],
+  );
+
+  const clearQueue = useCallback(async () => {
+    clearQueueStore();
+    const { currentTrack } = usePlayerStore.getState();
+    if (currentTrack) {
+      try {
+        await provider.pause();
+      } catch {
+        /* ignore — provider pause failure should not block UI cleanup */
+      }
+    }
+    setCurrentTrack(null);
+    setPosition(0);
+    setDuration(0);
+    setStatus("idle");
+  }, [clearQueueStore, provider, setCurrentTrack, setDuration, setPosition, setStatus]);
+
   const togglePlay = useCallback(async () => {
-    const { status } = usePlayerStore.getState();
-    const current = usePlayerStore.getState().currentTrack ?? getCurrentTrack();
-    if (!current) {
+    const { status, currentTrack } = usePlayerStore.getState();
+    const track = currentTrack ?? getCurrentTrack();
+    if (!track) {
       return;
     }
-    if (status === "playing") {
-      await provider.pause();
-      setStatus("paused");
-    } else {
-      if (status === "idle") {
-        await provider.play(current);
+    try {
+      if (status === "playing") {
+        await provider.pause();
+        setStatus("paused");
       } else {
-        await provider.resume();
+        if (status === "idle") {
+          await provider.play(track);
+        } else {
+          await provider.resume();
+        }
+        setStatus("playing");
       }
-      setStatus("playing");
+    } catch (err) {
+      setStatus("error");
+      console.error("playback.togglePlay failed", err);
     }
   }, [getCurrentTrack, provider, setStatus]);
 
   const pause = useCallback(async () => {
-    await provider.pause();
-    setStatus("paused");
+    try {
+      await provider.pause();
+      setStatus("paused");
+    } catch (err) {
+      setStatus("error");
+      console.error("playback.pause failed", err);
+    }
   }, [provider, setStatus]);
 
   const resume = useCallback(async () => {
@@ -145,44 +248,65 @@ export function usePlayback(): PlaybackController {
     if (!current) {
       return;
     }
-    await provider.resume();
-    setStatus("playing");
+    try {
+      await provider.resume();
+      setStatus("playing");
+    } catch (err) {
+      setStatus("error");
+      console.error("playback.resume failed", err);
+    }
   }, [getCurrentTrack, provider, setStatus]);
 
   const next = useCallback(async () => {
     const track = moveNext();
     if (!track) {
-      // End of queue: stop playback but keep the current track visible.
-      await provider.pause();
+      try {
+        await provider.pause();
+      } catch (err) {
+        console.error("playback.next pause failed", err);
+      }
       setStatus("paused");
       return;
     }
-    setCurrentTrack(track);
-    setPosition(0);
-    setDuration(track.duration);
-    await provider.play(track);
-    setStatus("playing");
-  }, [moveNext, provider, setCurrentTrack, setDuration, setPosition, setStatus]);
+    prepareForTrack(track);
+    try {
+      await provider.play(track);
+      setStatus("playing");
+    } catch (err) {
+      setStatus("error");
+      console.error("playback.next failed", err);
+    }
+  }, [moveNext, provider, setStatus]);
 
   const previous = useCallback(async () => {
     const track = movePrevious();
     if (!track) {
-      // At the start of the queue: rewind current to 0.
       setPosition(0);
-      await provider.seek(0);
+      try {
+        await provider.seek(0);
+      } catch (err) {
+        console.error("playback.previous seek failed", err);
+      }
       return;
     }
-    setCurrentTrack(track);
-    setPosition(0);
-    setDuration(track.duration);
-    await provider.play(track);
-    setStatus("playing");
-  }, [movePrevious, provider, setCurrentTrack, setDuration, setPosition, setStatus]);
+    prepareForTrack(track);
+    try {
+      await provider.play(track);
+      setStatus("playing");
+    } catch (err) {
+      setStatus("error");
+      console.error("playback.previous failed", err);
+    }
+  }, [movePrevious, provider, setStatus, setPosition]);
 
   const seek = useCallback(
     async (position: number) => {
       setPosition(position);
-      await provider.seek(position);
+      try {
+        await provider.seek(position);
+      } catch (err) {
+        console.error("playback.seek failed", err);
+      }
     },
     [provider, setPosition],
   );
@@ -190,20 +314,23 @@ export function usePlayback(): PlaybackController {
   const setVolume = useCallback(
     async (volume: number) => {
       setVolumeState(volume);
-      await provider.setVolume(volume);
+      try {
+        await provider.setVolume(volume);
+      } catch (err) {
+        console.error("playback.setVolume failed", err);
+      }
     },
     [provider, setVolumeState],
   );
 
-  // Exposed for completeness in case a feature surface wants to wipe the
-  // playback context (e.g. when signing out). Kept here so consumers do
-  // not reach into the stores directly.
-  void clear;
-
   return {
     playTracks,
     playTrack,
+    playQueue,
+    playQueueIndex,
     enqueue: enqueueTrack,
+    removeFromQueue,
+    clearQueue,
     togglePlay,
     pause,
     resume,
@@ -212,4 +339,36 @@ export function usePlayback(): PlaybackController {
     seek,
     setVolume,
   };
+}
+
+/**
+ * Internal: shared path used by `playTracks` and `playQueue`. Encapsulates
+ * the queue swap, the pre-flight state and the provider call with error
+ * handling so both entry points behave identically.
+ */
+async function playTrackInternal(
+  tracks: Track[],
+  startIndex: number,
+  deps: {
+    enqueueQueue: (tracks: Track[]) => void;
+    provider: ReturnType<typeof useMusicProvider>;
+    setStatus: (status: "idle" | "loading" | "playing" | "paused" | "error") => void;
+  },
+): Promise<void> {
+  const first = tracks[startIndex];
+  if (!first) {
+    return;
+  }
+  deps.enqueueQueue(tracks);
+  // After enqueue, currentIndex is 0. Jump to the requested startIndex
+  // BEFORE preparing the track so the queue store stays consistent.
+  useQueueStore.setState({ currentIndex: startIndex });
+  prepareForTrack(first);
+  try {
+    await deps.provider.play(first);
+    deps.setStatus("playing");
+  } catch (err) {
+    deps.setStatus("error");
+    console.error("playback.playQueue failed", err);
+  }
 }

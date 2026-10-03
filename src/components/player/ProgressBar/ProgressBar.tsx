@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Slider } from "@/components/common/Slider";
 import { formatDuration } from "@/utils/time";
 
@@ -7,12 +8,16 @@ export interface ProgressBarProps {
   onSeek: (position: number) => void;
 }
 
+/**
+ * Transport progress bar. Wraps the base Slider with proper time labels
+ * and clamps the value range so the track can never seek past duration.
+ */
 export function ProgressBar({ position, duration, onSeek }: ProgressBarProps) {
-  const max = Math.max(duration, 0.001);
+  const max = useMemo(() => Math.max(duration, 0.001), [duration]);
 
   return (
     <div className="flex items-center gap-3">
-      <span className="w-10 text-right text-xs tabular-nums text-[var(--color-text-muted)]">
+      <span className="w-10 text-right text-[11px] tabular-nums text-[var(--color-text-muted)]">
         {formatDuration(position)}
       </span>
       <div className="flex-1">
@@ -25,7 +30,7 @@ export function ProgressBar({ position, duration, onSeek }: ProgressBarProps) {
           onChange={onSeek}
         />
       </div>
-      <span className="w-10 text-xs tabular-nums text-[var(--color-text-muted)]">
+      <span className="w-10 text-[11px] tabular-nums text-[var(--color-text-muted)]">
         {formatDuration(duration)}
       </span>
     </div>

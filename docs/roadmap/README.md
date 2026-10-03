@@ -21,7 +21,7 @@ Status: **shipped**.
 
 ## v0.0.2 — Foundation Hardening
 
-Status: **in progress** (current release).
+Status: **shipped**.
 
 - Reproducible Rust CI checks: `Cargo.lock` versioned, system deps for
   Tauri 2 in Linux installed on the runner.
@@ -38,17 +38,54 @@ Status: **in progress** (current release).
 - ADR aligned with the implementation: Vite 8 native path resolver,
   `Cargo.lock` policy, queue ownership, `volume` placement.
 
-Explicitly **not** included in v0.0.2:
+## v0.0.3 — Visual Prototype
+
+Status: **shipped** (current release).
+
+- Refined Chromatic Dark design system with brand mark and consistent
+  typography rhythm.
+- Album-reactive Chromatic Engine: `useChromaticTheme` writes palette
+  tokens to the document root; Fullscreen Player renders the strongest
+  expression of the album's atmosphere.
+- Redesigned Home (hero + sectioned lists + skeleton loaders),
+  Album (cover + metadata + contextual `Play album`), Search (large
+  input + grouped sections), Library (tracks / albums / artists /
+  playlists tabs).
+- Contextual queue playback: `usePlayback.playQueue(tracks, startIndex)`
+  so Next / Previous flow naturally through the album / playlist /
+  artist surface that originated the playback.
+- Queue drawer with "Now playing" and "Next up" sections, jump-to,
+  remove and an inline "playing" indicator.
+- Mini Player redesigned: contextual current-track highlight,
+  inline volume, integrated progress bar.
+- Fullscreen Player: cinematic layout, mock lyrics, glow atmosphere,
+  graceful "Nothing playing" empty state.
+- Async state hardened: `useAsyncResource` resets to loading on key
+  change without flushing stale data; `SearchPage` uses a sequence
+  counter so only the latest search wins.
+- Vitest introduced: 31 tests covering QueueStore, `usePlayback`,
+  `useAsyncResource` and the Search stale-handling sequence.
+- CI extended with a `test` step on the frontend job.
+
+Explicitly **not** included in v0.0.3:
 
 - Real TIDAL API integration, OAuth or authentication.
 - Real audio playback.
 - Persistence, SQLite, settings migration.
-- Lyrics.
+- Lyrics (only mock placeholder).
 - Discord Rich Presence, MPRIS, Windows Media Session.
 - Jellyfin, local music, plugins, visualizers.
-- Real chromatic colour extraction.
+- Real chromatic colour extraction from artwork.
 
-## v0.1.0 — Core Player
+## Next phase
+
+The next release will be defined in a follow-up task once the
+foundation is reviewed. Candidates are:
+
+- **v0.1.0 — Core Player** with `TidalProvider` and a real audio engine.
+- **v0.0.4 — Visual prototype iteration** based on review feedback.
+
+## v0.1.0 — Core Player (planned)
 
 - Real audio engine.
 - Queue, shuffle, repeat.
@@ -57,7 +94,7 @@ Explicitly **not** included in v0.0.2:
 - Persistent settings.
 - TIDAL authentication flow.
 
-## v0.2.0 — Desktop Integration
+## v0.2.0 — Desktop Integration (planned)
 
 - Media keys (Linux, Windows).
 - MPRIS on Linux.
@@ -65,20 +102,20 @@ Explicitly **not** included in v0.0.2:
 - Taskbar / dock metadata.
 - Discord Rich Presence (optional).
 
-## v0.3.0 — Experience
+## v0.3.0 — Experience (planned)
 
 - Real lyrics.
 - Chromatic palette extraction from artwork.
 - Fullscreen player polish.
 - Replayable queue and history.
 
-## v0.4.0+ — Providers
+## v0.4.0+ — Providers (planned)
 
 - Local music library.
 - Additional backends (Spotify, Jellyfin).
 - Provider abstraction proven with multiple live implementations.
 
-## v1.0.0 — Stable
+## v1.0.0 — Stable (planned)
 
 - Stable API surface.
 - Polished onboarding.

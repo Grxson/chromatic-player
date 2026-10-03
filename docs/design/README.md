@@ -20,8 +20,9 @@ slightly melancholic
 
 - **Dark base** — neutral warm-tinted canvas, never pure black.
 - **Album reactive** — surface tokens can be tinted by the dominant
-  palette of the currently playing artwork. Falls back to the neutral
-  palette until real extraction is enabled.
+  palette of the currently playing artwork. The mock engine maps each
+  album to a `ChromaticPalette`; a future extraction pipeline will
+  replace that map.
 - **Minimal motion** — only fade, small translate, small scale and
   layout transitions. No permanent animations.
 - **Artwork focused** — album art is the visual hero. Other UI stays
@@ -31,25 +32,29 @@ slightly melancholic
 
 ## Token reference
 
-Tokens are defined as CSS variables in `src/styles/theme.css` and
-`src/styles/chromatic.css`:
+Tokens are defined in `src/styles/theme.css` and `src/styles/chromatic.css`:
 
 | Group         | Token                  | Value                       |
 | ------------- | ---------------------- | --------------------------- |
 | Surface       | `--color-canvas`       | `#080809`                   |
 | Surface       | `--color-surface`      | `#101012`                   |
 | Surface       | `--color-surface-2`    | `#161619`                   |
-| Surface       | `--color-elevated`     | `#1d1d20`                   |
-| Text          | `--color-text-primary` | `#f2f1ed`                   |
-| Text          | `--color-text-secondary` | `#9c9ca1`                 |
+| Surface       | `--color-elevated`     | `#1D1D20`                   |
+| Text          | `--color-text-primary` | `#F2F1ED`                   |
+| Text          | `--color-text-secondary` | `#9C9CA1`                 |
 | Text          | `--color-text-muted`   | `#646468`                   |
 | Border        | `--color-border`       | `rgba(255,255,255,0.07)`    |
-| Reactive      | `--color-album-dominant` (placeholder) | `#2a2a30`     |
-| Reactive      | `--color-album-secondary` (placeholder) | `#1f1f24`     |
-| Reactive      | `--color-album-accent` (placeholder) | `#5a5a64`        |
-| Reactive      | `--color-album-dark` (placeholder) | `#0c0c0e`           |
-| Reactive      | `--color-album-light` (placeholder) | `#d8d8de`          |
-| Global        | `--chromatic-background`, `--chromatic-foreground`, `--chromatic-accent`, `--chromatic-accent-muted`, `--chromatic-glow-primary`, `--chromatic-glow-secondary` | (fallbacks) |
+| Reactive      | `--album-dominant`     | `#2a2a30` (fallback)        |
+| Reactive      | `--album-secondary`    | `#1f1f24` (fallback)        |
+| Reactive      | `--album-accent`       | `#5a5a64` (fallback)        |
+| Reactive      | `--album-dark`         | `#0c0c0e` (fallback)        |
+| Reactive      | `--album-light`        | `#d8d8de` (fallback)        |
+| Glow          | `--chromatic-glow-primary`   | `rgba(201,195,182,0.18)` (fallback) |
+| Glow          | `--chromatic-glow-secondary` | `rgba(255,255,255,0.02)`          |
+| Hue           | `--chromatic-hue`      | `#c9c3b6` (fallback)        |
+
+The reactive values are overwritten at runtime by `useChromaticTheme`
+whenever the `currentTrack` changes.
 
 ## Anti-patterns
 

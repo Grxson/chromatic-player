@@ -57,6 +57,20 @@ usePlayback
 QueueStore + PlayerStore + MusicProvider
 ```
 
+### Contextual queue playback
+
+`usePlayback` exposes both `playTrack(track)` (single-entry queue,
+useful for isolated search results) and `playQueue(tracks, startIndex)`
+(replaces the queue and starts at the given index). Album / Artist /
+Playlist / Home sections call `playQueue` so Next / Previous flow
+naturally through the source collection.
+
+### Async status lifecycle
+
+Playback transitions go through `loading` before resolving to
+`playing`, `paused` or `error`. On `error` the previous track is kept
+in the store so the UI keeps its context; only the status flips.
+
 ## Routing is in-memory for now
 
 Routing is implemented as an in-memory context provider instead of
@@ -79,6 +93,21 @@ animations, sidebar collapse, audio quality, …). If we later need a
 "default volume at startup" it will be a separate `defaultVolume` field
 on `SettingsStore` with that exact meaning — not a duplicate `volume`.
 
+## Visual metadata lives in `src/features/chromatic/`
+
+Album palettes are UI metadata. They live in `chromatic.mock.ts` (and
+soon in a real extraction pipeline) and are not part of the music
+domain entities. This keeps `Track` / `Album` / `Artist` purely
+musical.
+
+## Chromatic theme as CSS custom properties
+
+`useChromaticTheme` writes the active palette to the document root as
+`--chromatic-hue`, `--album-dominant`, `--album-accent`,
+`--chromatic-glow-primary` etc. Components reference the variables;
+they never look up colours directly. This is the seam for the future
+real extraction pipeline.
+
 ## Motion reserved, not pervasive
 
 `motion` is installed but the foundation intentionally avoids
@@ -89,3 +118,18 @@ design lands in the v0.3.0 milestone.
 
 This is an application, not a published library, so `Cargo.lock` is
 checked in. CI uses `cargo check --locked` for reproducible validation.
+
+## WebKitGTK 4.1 is the correct runtime
+
+Tauri 2 on Linux links against **WebKitGTK API 4.1** (not 4.0). The
+Ubuntu runner installs `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`,
+`libayatana-appindicator3-dev`, `librsvg2-dev`, `libssl-dev` and
+`pkg-config`. Earlier documentation references to "GTK 4" were
+inaccurate and have been corrected in the workflow file.
+
+## Stale-result-safe async resources
+
+`useAsyncResource` uses `useReducer` so the reset to `loading` is a
+pure state transition. A `cancelled` flag guards against stale results.
+The Search page layers a request sequence counter on top so only the
+most recent query can update the UI.

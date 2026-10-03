@@ -2,32 +2,37 @@
 
 A lightweight chromatic desktop music player powered by **TIDAL**.
 
-> **Current release: v0.0.2 — Foundation Hardening.** This release
-> clarifies queue ownership, adds a coordinated mock playback layer,
-> wires ID-based navigation for Album and Artist pages, exposes the
-> mock Search experience and makes the Rust CI reproducible by
-> versioning `Cargo.lock`. It does **not** connect to TIDAL, does
-> **not** play audio, and ships a mock data layer so the UI can be
-> exercised end-to-end.
+> **Current release: v0.0.3 — Visual Prototype.** This release turns
+> the foundation into the first serious visual experience of Chromatic
+> Player: a refined Chromatic Dark design system, an album-reactive
+> chromatic atmosphere, redesigned Home / Album / Artist / Search /
+> Library / Settings surfaces, a context-aware mock playback queue,
+> a Queue drawer, a redesigned Mini Player and an immersive
+> Fullscreen Player with mock lyrics. It does **not** connect to
+> TIDAL, does **not** play audio, and still ships a mock data layer.
 
 ---
 
 ## Status
 
-| Layer            | State                                                                 |
-| ---------------- | --------------------------------------------------------------------- |
-| Project skeleton | ✅ Tauri 2 + React + TypeScript + Vite                                |
-| Styling          | ✅ Tailwind CSS + Chromatic Dark                                      |
-| State            | ✅ Zustand stores                                                     |
-| Icons            | ✅ Lucide React                                                       |
-| Motion           | ✅ Motion (reserved, minimal use)                                     |
-| Architecture     | ✅ Presentation → Application → Domain → Infrastructure               |
-| Music provider   | ⚠️ `MusicProvider` port + `MockMusicProvider` (TidalProvider pending) |
-| Playback         | ✅ Mock playback via `usePlayback` (queue + player + provider)        |
-| Mock navigation  | ✅ Album / Artist pages driven by `route.id` and provider             |
-| Mock search      | ✅ Loading / empty / results / error wired to `MusicProvider.search`  |
-| TIDAL API        | 🚧 Reserved                                                           |
-| Distribution     | 🚧 Reserved                                                           |
+| Layer             | State                                                                 |
+| ----------------- | --------------------------------------------------------------------- |
+| Project skeleton  | ✅ Tauri 2 + React + TypeScript + Vite                                |
+| Styling           | ✅ Tailwind CSS + Chromatic Dark                                      |
+| State             | ✅ Zustand stores                                                     |
+| Icons             | ✅ Lucide React                                                       |
+| Motion            | ✅ Motion (reserved, minimal use)                                     |
+| Architecture      | ✅ Presentation → Application → Domain → Infrastructure               |
+| Music provider    | ⚠️ `MusicProvider` port + `MockMusicProvider` (TidalProvider pending) |
+| Playback          | ✅ Mock playback via `usePlayback` (contextual queue + statuses)      |
+| Chromatic Engine  | ✅ Album-reactive palette mapped to CSS custom properties             |
+| Mock navigation   | ✅ Album / Artist pages driven by `route.id` and provider             |
+| Mock search       | ✅ Provider-backed, stale-result safe                                 |
+| Queue drawer      | ✅ Now playing + next-up, remove / clear / jump                       |
+| Library           | ✅ Liked tracks, saved albums, followed artists, playlists            |
+| Fullscreen Player | ✅ Cinematic layout + atmospheric glow + mock lyrics                  |
+| TIDAL API         | 🚧 Reserved                                                           |
+| Distribution      | 🚧 Reserved                                                           |
 
 ---
 
@@ -41,6 +46,7 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 - **Zustand** — client state
 - **Motion** — minimal motion
 - **Lucide React** — iconography
+- **Vitest** — unit / integration tests
 - **pnpm** — package manager
 
 ---
@@ -71,6 +77,7 @@ Presentation  →  src/components, src/pages, src/app
 Application   →  src/stores, src/hooks, src/app/providers, src/app/router
 Domain        →  src/domain/entities, src/domain/ports, src/domain/models
 Infrastructure →  src/infrastructure/tidal, src/infrastructure/mock, src/infrastructure/storage
+Features      →  src/features/chromatic, src/features/queue, src/features/library
 ```
 
 More detail in [`docs/architecture/README.md`](docs/architecture/README.md).
@@ -136,6 +143,8 @@ pnpm lint            # ESLint
 pnpm lint:fix        # ESLint with --fix
 pnpm format          # Prettier write
 pnpm format:check    # Prettier check (used in CI)
+pnpm test            # Vitest (used in CI)
+pnpm test:watch      # Vitest in watch mode
 ```
 
 ---
@@ -152,14 +161,15 @@ chromatic-player/
 │   ├── components/         UI components (common, layout, music, player)
 │   ├── domain/             Entities + provider port
 │   ├── infrastructure/     Concrete providers (mock, tidal, storage)
-│   ├── features/           Future feature surfaces (auth, playback, ...)
+│   ├── features/           Chromatic Engine, queue drawer, library tabs
 │   ├── stores/             Zustand stores
 │   ├── pages/              Route-level views
-│   ├── mocks/              Mock data used by MockMusicProvider
+│   ├── mocks/              Mock data (used by MockMusicProvider)
 │   ├── styles/             Global CSS + design tokens
 │   ├── hooks/              Reusable hooks (usePlayback, useAsyncResource)
 │   ├── types/              Cross-cutting type helpers
-│   └── utils/              Pure utility functions
+│   ├── utils/              Pure utility functions
+│   └── test/               Vitest tests
 └── src-tauri/              Rust + Tauri configuration
 ```
 
@@ -170,7 +180,8 @@ chromatic-player/
 | Version | Theme                                                          |
 | ------- | -------------------------------------------------------------- |
 | v0.0.1  | Foundation                                                     |
-| v0.0.2  | Foundation Hardening (current)                                 |
+| v0.0.2  | Foundation Hardening                                           |
+| v0.0.3  | Visual Prototype (current)                                     |
 | v0.1.0  | Core Player (real audio, queue, library)                       |
 | v0.2.0  | Desktop Integration (media keys, MPRIS, Windows Media Session) |
 | v0.3.0  | Experience (lyrics, Chromatic palette, visual polish)          |

@@ -24,6 +24,7 @@ Infrastructure
 | Application      | Zustand stores, hooks, providers, router              |
 | Domain           | Entities, value objects, ports (interfaces)           |
 | Infrastructure   | Concrete implementations (TidalProvider, MockMusicProvider, storage) |
+| Features         | Cross-cutting UX surfaces (chromatic, queue, library)  |
 
 ### Presentation
 
@@ -49,6 +50,12 @@ application and any concrete music backend.
 Concrete adapters that implement the domain ports. Today this is
 `MockMusicProvider`. Future providers (TidalProvider, local files,
 etc.) will live here as siblings and never leak into the UI.
+
+### Features
+
+Feature-shaped surfaces that cut across the layers: the mock Chromatic
+Engine, the Queue drawer and the Library tabs. They own their UI and
+state but never bypass the application or domain layers.
 
 ## Provider seam
 
@@ -80,7 +87,7 @@ the system stays consistent.
 ```
 UI component
    ↓
-usePlayback.playTrack(track) / .next() / .seek(position) / .setVolume(v)
+usePlayback.playTrack(track) / .playQueue(tracks, i) / .next() / .seek(position) / .setVolume(v)
    ↓
 QueueStore      ← cursor + tracks
 Provider        ← single-track transport
@@ -91,6 +98,32 @@ PlayerStore     ← observable state for the UI
 three together. Components never reach into the provider directly and
 they never compute next-track indexes themselves.
 
+### Status lifecycle
+
+`PlayerStore.status` moves through the following states:
+
+```
+idle ─► loading ─► playing
+                  ▲
+                  └──► paused ─► playing
+                              ▲
+                              └──► error
+```
+
+Every `usePlayback` action transitions to `loading` before calling the
+provider, then to `playing` / `paused` / `error` based on the outcome.
+On `error`, the previous track stays in the store so the UI keeps its
+context; only the status flips.
+
+## Chromatic Engine
+
+`useChromaticTheme` (in `src/features/chromatic/`) is a thin hook that
+maps the current `albumId` to a `ChromaticPalette` and writes the
+palette to the document root as CSS custom properties
+(`--chromatic-hue`, `--album-dominant`, `--album-accent`, `--chromatic-glow-primary`, …).
+Today the palette table lives in `src/features/chromatic/chromatic.mock.ts`.
+When real colour extraction arrives, only that file changes.
+
 ## Folder layout
 
 ```text
@@ -100,7 +133,7 @@ src/
 │   ├── common/          # Buttons, sliders, toasts, etc.
 │   ├── layout/          # AppShell, Sidebar, Header, Content
 │   ├── music/           # Artwork, cards, rows
-│   └── player/          # MiniPlayer, controls, progress, volume
+│   └── player/          # MiniPlayer, controls, progress, volume, fullscreen
 ├── domain/
 │   ├── entities/        # Track, Album, Artist, Playlist, User
 │   ├── models/          # Composite value types
@@ -109,19 +142,25 @@ src/
 │   ├── mock/            # MockMusicProvider
 │   ├── tidal/           # TidalProvider (future)
 │   └── storage/         # Persistent settings (future)
+├── features/
+│   ├── chromatic/       # Album-reactive palette + theme hook
+│   ├── queue/           # Queue drawer
+│   └── library/         # Library tabs
 ├── stores/              # auth, player, queue, library, settings
-├── hooks/               # usePlayback, useAsyncResource
+├── hooks/               # usePlayback, useAsyncResource, useRouter, useChromaticTheme
 ├── pages/               # Route-level views
-├── mocks/               # Static mock data (only used by MockMusicProvider)
+├── mocks/               # Static mock data + artwork + chromatic palettes
 ├── styles/              # Global CSS + design tokens
 ├── types/               # Cross-cutting type helpers
-└── utils/               # Pure utility functions
+├── utils/               # Pure utility functions
+└── test/                # Vitest tests
 ```
 
 ## Principles
 
 - **Domain stays pure.** No TIDAL types inside `src/domain/`.
 - **UI never talks to providers directly.** Always through `usePlayback`.
+- **Visual metadata lives in `src/features/chromatic/`, not on entities.**
 - **No premature abstractions.** Add a port when there are at least two
   implementations or a real need to test in isolation.
 - **Rust is the bridge, not the brain.** Keep Rust minimal and use it

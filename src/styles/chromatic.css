@@ -5,12 +5,10 @@
  * will be derived from the currently playing album artwork. For now they
  * provide fallback neutral values that keep the UI cohesive and ambient.
  *
- * The tokens are split between:
- *   - global (--chromatic-*): applied to the whole shell surface
- *   - per-area (--album-*):   applied to localized artwork containers
- *
- * Keeping the variables defined here lets UI code reference stable names
- * even when the extraction pipeline is not active.
+ * The variables are assigned at runtime by `useChromaticTheme`
+ * (src/features/chromatic/useChromaticTheme.ts) whenever the
+ * `currentTrack` changes. The `--chromatic-*` names are stable and may
+ * be referenced from any surface.
  */
 
 :root {

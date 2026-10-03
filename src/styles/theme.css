@@ -1,0 +1,66 @@
+/*
+ * Chromatic Dark — base design tokens.
+ *
+ * The palette is intentionally neutral, slightly warm and a touch melancholic.
+ * The reactive (album-driven) tokens are placeholders until real color
+ * extraction is implemented. Fallback values are dark by design.
+ */
+
+@theme inline {
+  --color-canvas: #080809;
+  --color-surface: #101012;
+  --color-surface-2: #161619;
+  --color-elevated: #1d1d20;
+
+  --color-text-primary: #f2f1ed;
+  --color-text-secondary: #9c9ca1;
+  --color-text-muted: #646468;
+
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-accent: #c9c3b6;
+  --color-accent-hover: #e8e3d5;
+
+  --color-danger: #b04a4a;
+
+  /* Reactive (album-driven) placeholders — overridden at runtime. */
+  --color-album-dominant: #2a2a30;
+  --color-album-secondary: #1f1f24;
+  --color-album-accent: #5a5a64;
+  --color-album-dark: #0c0c0e;
+  --color-album-light: #d8d8de;
+
+  /* Radii — kept small and consistent. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Spacing rhythm follows Tailwind defaults; nothing custom here yet. */
+}
+
+:root {
+  --color-canvas: #080809;
+  --color-surface: #101012;
+  --color-surface-2: #161619;
+  --color-elevated: #1d1d20;
+
+  --color-text-primary: #f2f1ed;
+  --color-text-secondary: #9c9ca1;
+  --color-text-muted: #646468;
+
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-strong: rgba(255, 255, 255, 0.12);
+
+  --color-accent: #c9c3b6;
+  --color-accent-hover: #e8e3d5;
+
+  --color-danger: #b04a4a;
+
+  --color-album-dominant: #2a2a30;
+  --color-album-secondary: #1f1f24;
+  --color-album-accent: #5a5a64;
+  --color-album-dark: #0c0c0e;
+  --color-album-light: #d8d8de;
+}

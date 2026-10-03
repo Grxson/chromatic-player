@@ -1,0 +1,33 @@
+/*
+ * Chromatic — reactive ambient tokens.
+ *
+ * These tokens describe the dynamic palette that, in future iterations,
+ * will be derived from the currently playing album artwork. For now they
+ * provide fallback neutral values that keep the UI cohesive and ambient.
+ *
+ * The tokens are split between:
+ *   - global (--chromatic-*): applied to the whole shell surface
+ *   - per-area (--album-*):   applied to localized artwork containers
+ *
+ * Keeping the variables defined here lets UI code reference stable names
+ * even when the extraction pipeline is not active.
+ */
+
+:root {
+  /* Global chromatic identity — fallback neutral. */
+  --chromatic-background: var(--color-canvas);
+  --chromatic-foreground: var(--color-text-primary);
+  --chromatic-accent: var(--color-accent);
+  --chromatic-accent-muted: var(--color-text-muted);
+
+  /* Soft ambient glows used in transitions or backdrops. */
+  --chromatic-glow-primary: rgba(201, 195, 182, 0.06);
+  --chromatic-glow-secondary: rgba(255, 255, 255, 0.02);
+
+  /* Album-reactive aliases — these mirror --color-album-*. */
+  --album-dominant: var(--color-album-dominant);
+  --album-secondary: var(--color-album-secondary);
+  --album-accent: var(--color-album-accent);
+  --album-dark: var(--color-album-dark);
+  --album-light: var(--color-album-light);
+}

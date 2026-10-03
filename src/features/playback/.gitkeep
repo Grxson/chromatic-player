@@ -1,0 +1,2 @@
+# Playback feature surface. Will host queue management, transport
+# orchestration and audio engine glue in a future release.

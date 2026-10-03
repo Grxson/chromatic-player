@@ -1,0 +1,2 @@
+# Cross-cutting type helpers that do not belong to a specific domain
+# entity. Keep this folder lean.

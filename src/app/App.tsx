@@ -22,16 +22,16 @@ export function App() {
 
   const view: ViewKey = route.type === "view" && isViewKey(route.view) ? route.view : "home";
 
-  const body =
-    route.type === "view" ? (
-      renderView(view)
-    ) : route.type === "album" ? (
-      <AlbumPage />
-    ) : route.type === "artist" ? (
-      <ArtistPage />
-    ) : (
-      <FullscreenPlayerPage onMinimize={() => navigate({ type: "view", view: "home" })} />
-    );
+  let body: React.ReactNode;
+  if (route.type === "view") {
+    body = renderView(view);
+  } else if (route.type === "album") {
+    body = <AlbumPage albumId={route.id} />;
+  } else if (route.type === "artist") {
+    body = <ArtistPage artistId={route.id} />;
+  } else {
+    body = <FullscreenPlayerPage onMinimize={() => navigate({ type: "view", view: "home" })} />;
+  }
 
   return (
     <AppShell

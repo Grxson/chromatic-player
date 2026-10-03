@@ -1,36 +1,61 @@
+import { useCallback } from "react";
 import { Mic2 } from "lucide-react";
+import type { Album, Artist } from "@/domain/entities";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { Artwork } from "@/components/music/Artwork";
 import { AlbumCard } from "@/components/music/AlbumCard";
-import { mockAlbums, mockArtists } from "@/mocks";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Spinner } from "@/components/common/Spinner";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useRouter } from "@/app/router/useRouter";
 
-/**
- * Placeholder artist detail page. The real routing story arrives with
- * the Core Player release; we render the first mock artist so the layout
- * can be verified visually.
- */
-export function ArtistPage() {
-  const artist = mockArtists[0];
-  const albums = artist
-    ? mockAlbums.filter((album) => album.artists.some((a) => a.id === artist.id))
-    : [];
+export interface ArtistPageProps {
+  artistId: string;
+}
 
-  if (!artist) {
+interface ArtistData {
+  artist: Artist;
+  albums: Album[];
+}
+
+export function ArtistPage({ artistId }: ArtistPageProps) {
+  const provider = useMusicProvider();
+  const { navigate } = useRouter();
+
+  const loader = useCallback(() => loadArtist(provider, artistId), [provider, artistId]);
+  const { status, data, error } = useAsyncResource<ArtistData>(artistId, loader);
+
+  if (status === "loading" || status === "idle") {
     return (
       <>
-        <Header title="Artist" />
+        <Header title="Artist" subtitle="Loading…" />
         <Content>
-          <div className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-4 py-24 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
-              <Mic2 size={20} aria-hidden="true" />
-            </div>
-            <p className="text-sm text-[var(--color-text-secondary)]">No artist selected.</p>
+          <div className="flex justify-center py-24">
+            <Spinner size={20} />
           </div>
         </Content>
       </>
     );
   }
+
+  if (status === "error" || !data) {
+    return (
+      <>
+        <Header title="Artist" />
+        <Content>
+          <EmptyState
+            icon={<Mic2 size={20} aria-hidden="true" />}
+            title="Artist unavailable"
+            description={error ?? "We could not load this artist."}
+          />
+        </Content>
+      </>
+    );
+  }
+
+  const { artist, albums } = data;
 
   return (
     <>
@@ -39,14 +64,35 @@ export function ArtistPage() {
         <div className="flex flex-col gap-6 lg:flex-row">
           <Artwork src={artist.imageUrl} alt={artist.name} size={220} rounded="full" />
           <div className="flex-1">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {albums.map((album) => (
-                <AlbumCard key={album.id} album={album} />
-              ))}
-            </div>
+            {albums.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                No albums for this artist yet.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {albums.map((album) => (
+                  <AlbumCard
+                    key={album.id}
+                    album={album}
+                    onOpen={(a) => navigate({ type: "album", id: a.id })}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Content>
     </>
   );
+}
+
+async function loadArtist(
+  provider: ReturnType<typeof useMusicProvider>,
+  artistId: string,
+): Promise<ArtistData> {
+  const [artist, albums] = await Promise.all([
+    provider.getArtist(artistId),
+    provider.getArtistAlbums(artistId),
+  ]);
+  return { artist, albums };
 }

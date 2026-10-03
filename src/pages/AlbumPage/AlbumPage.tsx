@@ -1,48 +1,115 @@
+import { useCallback } from "react";
 import { Disc3 } from "lucide-react";
+import type { Album, Track } from "@/domain/entities";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { Artwork } from "@/components/music/Artwork";
 import { TrackRow } from "@/components/music/TrackRow";
-import { mockAlbums, mockTracks } from "@/mocks";
+import { EmptyState } from "@/components/common/EmptyState";
+import { Spinner } from "@/components/common/Spinner";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { usePlayback } from "@/hooks/usePlayback";
 
-/**
- * Placeholder album detail page. The selected album id will be supplied
- * by the router in a later milestone; for now we render the first mock
- * album so the visual layout is verifiable.
- */
-export function AlbumPage() {
-  const album = mockAlbums[0];
-  const tracks = album ? mockTracks.filter((track) => track.album?.id === album.id) : [];
+export interface AlbumPageProps {
+  albumId: string;
+}
 
-  if (!album) {
+interface AlbumData {
+  album: Album;
+  tracks: Track[];
+}
+
+export function AlbumPage({ albumId }: AlbumPageProps) {
+  const provider = useMusicProvider();
+  const playback = usePlayback();
+
+  const loader = useCallback(() => loadAlbum(provider, albumId), [provider, albumId]);
+  const { status, data, error } = useAsyncResource<AlbumData>(albumId, loader);
+
+  if (status === "loading" || status === "idle") {
     return (
       <>
-        <Header title="Album" />
+        <Header title="Album" subtitle="Loading…" />
         <Content>
-          <div className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-4 py-24 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
-              <Disc3 size={20} aria-hidden="true" />
-            </div>
-            <p className="text-sm text-[var(--color-text-secondary)]">No album selected.</p>
+          <div className="flex justify-center py-24">
+            <Spinner size={20} />
           </div>
         </Content>
       </>
     );
   }
 
+  if (status === "error" || !data) {
+    return (
+      <>
+        <Header title="Album" />
+        <Content>
+          <EmptyState
+            icon={<Disc3 size={20} aria-hidden="true" />}
+            title="Album unavailable"
+            description={error ?? "We could not load this album."}
+          />
+        </Content>
+      </>
+    );
+  }
+
+  const { album, tracks } = data;
+  const subtitle = album.artists.map((a) => a.name).join(", ");
+
+  const handlePlayAll = () => {
+    void playback.playTracks(tracks);
+  };
+
   return (
     <>
-      <Header title={album.title} subtitle={album.artists.map((a) => a.name).join(", ")} />
+      <Header
+        title={album.title}
+        subtitle={subtitle}
+        actions={
+          <button
+            type="button"
+            onClick={handlePlayAll}
+            disabled={tracks.length === 0}
+            className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-canvas)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+          >
+            Play album
+          </button>
+        }
+      />
       <Content>
         <div className="flex flex-col gap-6 lg:flex-row">
           <Artwork src={album.artworkUrl} alt={album.title} size={220} rounded="md" />
           <div className="flex-1 space-y-1">
-            {tracks.map((track, index) => (
-              <TrackRow key={track.id} track={track} index={index} />
-            ))}
+            {tracks.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-secondary)]">No tracks in this album.</p>
+            ) : (
+              tracks.map((track, index) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  index={index}
+                  onPlay={(t) => {
+                    void playback.playTrack(t);
+                  }}
+                />
+              ))
+            )}
           </div>
         </div>
       </Content>
     </>
   );
+}
+
+async function loadAlbum(
+  provider: ReturnType<typeof useMusicProvider>,
+  albumId: string,
+): Promise<AlbumData> {
+  const [album, tracks] = await Promise.all([
+    provider.getAlbum(albumId),
+    provider.getAlbumTracks(albumId),
+  ]);
+  return { album, tracks };
 }

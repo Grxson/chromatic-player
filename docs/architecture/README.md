@@ -34,9 +34,9 @@ stores via hooks and call the application layer.
 ### Application
 
 Coordination layer. Contains Zustand stores (`src/stores/`), the router
-context (`src/app/router/`) and React providers
-(`src/app/providers/`). Translates user intent into provider calls and
-keeps the UI reactive.
+context (`src/app/router/`), the provider context
+(`src/app/providers/`) and cross-cutting hooks (`src/hooks/`).
+Translates user intent into provider calls and keeps the UI reactive.
 
 ### Domain
 
@@ -55,7 +55,9 @@ etc.) will live here as siblings and never leak into the UI.
 ```
 React UI
    ↓
-Application (stores / hooks)
+usePlayback hook (src/hooks/usePlayback.ts)
+   ↓
+QueueStore + PlayerStore (src/stores/)
    ↓
 MusicProvider  ←  port
    ↓
@@ -66,6 +68,28 @@ The application never imports from `src/infrastructure/tidal` or
 `src/infrastructure/mock` directly except through provider composition
 in `src/app/providers/`. This keeps the UI agnostic about which backend
 is active and makes future migrations straightforward.
+
+## Playback coordination
+
+Single track playback (play / pause / resume / seek / volume) is
+delegated to the provider. Queue navigation (next / previous /
+jumpTo / enqueue / clear) is owned by `QueueStore`. Both are wired
+together by `usePlayback` so the UI calls one method and the rest of
+the system stays consistent.
+
+```
+UI component
+   ↓
+usePlayback.playTrack(track) / .next() / .seek(position) / .setVolume(v)
+   ↓
+QueueStore      ← cursor + tracks
+Provider        ← single-track transport
+PlayerStore     ← observable state for the UI
+```
+
+`usePlayback` is the only place in the application that mutates all
+three together. Components never reach into the provider directly and
+they never compute next-track indexes themselves.
 
 ## Folder layout
 
@@ -86,9 +110,9 @@ src/
 │   ├── tidal/           # TidalProvider (future)
 │   └── storage/         # Persistent settings (future)
 ├── stores/              # auth, player, queue, library, settings
+├── hooks/               # usePlayback, useAsyncResource
 ├── pages/               # Route-level views
-├── hooks/               # Cross-cutting React hooks
-├── mocks/               # Static mock data
+├── mocks/               # Static mock data (only used by MockMusicProvider)
 ├── styles/              # Global CSS + design tokens
 ├── types/               # Cross-cutting type helpers
 └── utils/               # Pure utility functions
@@ -97,7 +121,7 @@ src/
 ## Principles
 
 - **Domain stays pure.** No TIDAL types inside `src/domain/`.
-- **UI never talks to providers directly.** Always through stores.
+- **UI never talks to providers directly.** Always through `usePlayback`.
 - **No premature abstractions.** Add a port when there are at least two
   implementations or a real need to test in isolation.
 - **Rust is the bridge, not the brain.** Keep Rust minimal and use it

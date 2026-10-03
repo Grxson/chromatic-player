@@ -3,9 +3,9 @@
 This document tracks the high-level milestones for Chromatic Player.
 Each milestone corresponds to a versioned release.
 
-## v0.0.x — Foundation
+## v0.0.1 — Foundation
 
-Status: **in progress** (current: v0.0.1)
+Status: **shipped**.
 
 - Tauri 2 + React + TypeScript + Vite + Tailwind CSS baseline.
 - Chromatic Dark design tokens.
@@ -17,16 +17,35 @@ Status: **in progress** (current: v0.0.1)
 - `MockMusicProvider` with static data.
 - Zustand stores: auth, player, queue, library, settings.
 - ESLint, Prettier, EditorConfig.
-- Initial CI workflow.
-- README, architecture, design and roadmap docs.
+- Initial CI workflow (frontend + `cargo check`).
 
-Explicitly **not** included in v0.0.x:
+## v0.0.2 — Foundation Hardening
+
+Status: **in progress** (current release).
+
+- Reproducible Rust CI checks: `Cargo.lock` versioned, system deps for
+  Tauri 2 in Linux installed on the runner.
+- Queue ownership clarified. `MusicProvider` no longer exposes
+  `next` / `previous`; `QueueStore` owns sequencing.
+- Single source of truth for `volume`: removed from `SettingsStore`,
+  lives on `PlayerStore`.
+- Lightweight playback layer (`usePlayback` hook) coordinates
+  `PlayerStore`, `QueueStore` and the provider.
+- Real ID-based navigation for Album and Artist pages.
+- Provider-backed mock Search with loading / empty / results / error.
+- Pages no longer import `@/mocks` directly; data comes from
+  `MockMusicProvider`.
+- ADR aligned with the implementation: Vite 8 native path resolver,
+  `Cargo.lock` policy, queue ownership, `volume` placement.
+
+Explicitly **not** included in v0.0.2:
 
 - Real TIDAL API integration, OAuth or authentication.
 - Real audio playback.
+- Persistence, SQLite, settings migration.
 - Lyrics.
 - Discord Rich Presence, MPRIS, Windows Media Session.
-- Jellyfin, local music, SQLite, plugins, visualizers.
+- Jellyfin, local music, plugins, visualizers.
 - Real chromatic colour extraction.
 
 ## v0.1.0 — Core Player

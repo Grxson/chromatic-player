@@ -1,2 +1,9 @@
-# Playback feature surface. Will host queue management, transport
-# orchestration and audio engine glue in a future release.
+# Playback feature surface
+
+Playback coordination lives in `src/hooks/usePlayback.ts` rather than in
+this folder. The hook is the single entry point for the UI to interact
+with the player/queue/provider triad.
+
+This folder is reserved for higher-level playback surfaces that may
+arrive later (queue panel, transport shortcuts, keyboard layer) without
+becoming an implementation dumping ground.

@@ -2,11 +2,13 @@
 
 A lightweight chromatic desktop music player powered by **TIDAL**.
 
-> **Foundation release (v0.0.1).** This version establishes the project
-> structure, the application shell and the architecture that subsequent
-> releases will build on. It does **not** connect to TIDAL, does **not**
-> play audio, and ships a mock data layer so the UI can be exercised
-> end-to-end.
+> **Current release: v0.0.2 — Foundation Hardening.** This release
+> clarifies queue ownership, adds a coordinated mock playback layer,
+> wires ID-based navigation for Album and Artist pages, exposes the
+> mock Search experience and makes the Rust CI reproducible by
+> versioning `Cargo.lock`. It does **not** connect to TIDAL, does
+> **not** play audio, and ships a mock data layer so the UI can be
+> exercised end-to-end.
 
 ---
 
@@ -21,7 +23,9 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 | Motion           | ✅ Motion (reserved, minimal use)                                     |
 | Architecture     | ✅ Presentation → Application → Domain → Infrastructure               |
 | Music provider   | ⚠️ `MusicProvider` port + `MockMusicProvider` (TidalProvider pending) |
-| Playback         | 🚧 Placeholder UI                                                     |
+| Playback         | ✅ Mock playback via `usePlayback` (queue + player + provider)        |
+| Mock navigation  | ✅ Album / Artist pages driven by `route.id` and provider             |
+| Mock search      | ✅ Loading / empty / results / error wired to `MusicProvider.search`  |
 | TIDAL API        | 🚧 Reserved                                                           |
 | Distribution     | 🚧 Reserved                                                           |
 
@@ -48,11 +52,13 @@ Chromatic Player follows a deliberately lightweight layered architecture:
 ```
 React UI
    ↓
-Application (stores, hooks, providers)
+usePlayback (src/hooks/usePlayback.ts)
    ↓
-Domain (entities + MusicProvider port)
+QueueStore + PlayerStore (src/stores/)
    ↓
-Infrastructure (MockMusicProvider today, TidalProvider tomorrow)
+MusicProvider  ←  port
+   ↓
+TidalProvider / MockMusicProvider  ←  adapters
 ```
 
 The UI never depends on a concrete provider. The `MusicProvider`
@@ -77,7 +83,7 @@ More detail in [`docs/architecture/README.md`](docs/architecture/README.md).
 - **pnpm** ≥ 10
 - **Rust** stable + `cargo` (for `pnpm tauri dev` / `pnpm tauri build`)
 - Platform build deps for Tauri:
-  - Linux — `libwebkit2gtk-4.1-dev`, `libssl-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`
+  - Linux — `libwebkit2gtk-4.1-dev`, `libssl-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libayatana-appindicator3-dev`, `pkg-config`
   - Windows — WebView2 (preinstalled on Windows 10/11), Visual Studio Build Tools
 
 ---
@@ -151,7 +157,7 @@ chromatic-player/
 │   ├── pages/              Route-level views
 │   ├── mocks/              Mock data used by MockMusicProvider
 │   ├── styles/             Global CSS + design tokens
-│   ├── hooks/              Reusable hooks
+│   ├── hooks/              Reusable hooks (usePlayback, useAsyncResource)
 │   ├── types/              Cross-cutting type helpers
 │   └── utils/              Pure utility functions
 └── src-tauri/              Rust + Tauri configuration
@@ -163,7 +169,8 @@ chromatic-player/
 
 | Version | Theme                                                          |
 | ------- | -------------------------------------------------------------- |
-| v0.0.x  | Foundation (this release)                                      |
+| v0.0.1  | Foundation                                                     |
+| v0.0.2  | Foundation Hardening (current)                                 |
 | v0.1.0  | Core Player (real audio, queue, library)                       |
 | v0.2.0  | Desktop Integration (media keys, MPRIS, Windows Media Session) |
 | v0.3.0  | Experience (lyrics, Chromatic palette, visual polish)          |

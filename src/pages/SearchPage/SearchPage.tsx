@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Music2, Search as SearchIcon } from "lucide-react";
 import type { Album, Artist, Track } from "@/domain/entities";
 import type { SearchResult } from "@/domain/ports";
@@ -51,32 +51,53 @@ export function SearchPage() {
   const { navigate } = useRouter();
 
   const [draft, setDraft] = useState("");
-  const [state, setState] = useState<SearchState>(INITIAL_STATE);
+  const [searchState, setSearchState] = useState<SearchState>(INITIAL_STATE);
+
+  // Sequence counter. Every search request bumps it; only the most
+  // recent request is allowed to update the UI state. Older results are
+  // ignored even if they resolve later. This prevents the classic
+  // "request A finishes after B and overwrites the correct result"
+  // race when the user is typing fast.
+  const sequenceRef = useRef(0);
 
   const runSearch = useCallback(
     async (query: string) => {
       const trimmed = query.trim();
       if (trimmed.length === 0) {
-        setState(INITIAL_STATE);
+        sequenceRef.current += 1;
+        setSearchState(INITIAL_STATE);
         return;
       }
-      setState({
+
+      const requestId = sequenceRef.current + 1;
+      sequenceRef.current = requestId;
+
+      setSearchState({
         phase: "loading",
         query: trimmed,
         result: null,
         error: null,
       });
+
       try {
         const result = await provider.search(trimmed, 10);
-        setState({
+        // If a newer search has been initiated while we were resolving,
+        // drop this result on the floor.
+        if (sequenceRef.current !== requestId) {
+          return;
+        }
+        setSearchState({
           phase: hasAnyResults(result) ? "results" : "empty",
           query: trimmed,
           result,
           error: null,
         });
       } catch (err) {
+        if (sequenceRef.current !== requestId) {
+          return;
+        }
         const message = err instanceof Error ? err.message : "Unknown error";
-        setState({
+        setSearchState({
           phase: "error",
           query: trimmed,
           result: null,
@@ -87,8 +108,7 @@ export function SearchPage() {
     [provider],
   );
 
-  // Debounce-free by design at this stage. Future iterations can layer a
-  // small debounce on top without changing this surface.
+  // Debounced re-run whenever the input draft changes.
   useEffect(() => {
     const handle = setTimeout(() => {
       void runSearch(draft);
@@ -105,47 +125,55 @@ export function SearchPage() {
         subtitle="Find tracks, albums, artists and playlists in the mock catalogue."
       />
       <Content>
-        <div className="mx-auto flex max-w-3xl flex-col gap-6">
-          <label className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 focus-within:border-[var(--color-text-secondary)]">
-            <SearchIcon size={16} aria-hidden="true" className="text-[var(--color-text-muted)]" />
+        <div className="mx-auto flex max-w-3xl flex-col gap-8">
+          <label className="group flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 focus-within:border-[var(--color-text-secondary)]">
+            <SearchIcon
+              size={18}
+              aria-hidden="true"
+              className="text-[var(--color-text-muted)] group-focus-within:text-[var(--color-text-primary)]"
+            />
             <input
               type="search"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Search tracks, albums, artists…"
               aria-label="Search"
-              className="w-full bg-transparent text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
+              autoFocus
+              className="w-full bg-transparent text-base text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
             />
-            {state.phase === "loading" ? <Spinner size={16} /> : null}
+            {searchState.phase === "loading" ? <Spinner size={16} /> : null}
           </label>
 
-          {state.phase === "idle" ? (
+          {searchState.phase === "idle" ? (
             <EmptyState
               icon={<SearchIcon size={20} aria-hidden="true" />}
               title="Search the catalogue"
               description="Type a track, album or artist name to see results from the mock data."
             />
-          ) : state.phase === "loading" ? (
+          ) : searchState.phase === "loading" ? (
             <div className="flex justify-center py-12">
               <Spinner size={20} />
             </div>
-          ) : state.phase === "error" ? (
+          ) : searchState.phase === "error" ? (
             <EmptyState
               icon={<AlertCircle size={20} aria-hidden="true" />}
               title="Search failed"
-              description={state.error ?? "Unknown error."}
+              description={searchState.error ?? "Unknown error."}
             />
-          ) : state.phase === "empty" ? (
+          ) : searchState.phase === "empty" ? (
             <EmptyState
               icon={<Music2 size={20} aria-hidden="true" />}
-              title={`No results for "${state.query}"`}
+              title={`No results for "${searchState.query}"`}
               description="Try a different query."
             />
           ) : (
             <Results
-              result={state.result!}
+              result={searchState.result!}
               onOpenAlbum={(album) => navigate({ type: "album", id: album.id })}
               onOpenArtist={(artist) => navigate({ type: "artist", id: artist.id })}
+              // Search results are a flat discovery list, not a coherent
+              // queue. Playback treats them as isolated tracks so we
+              // don't fabricate context that wasn't there.
               onPlayTrack={(track) => {
                 void playback.playTrack(track);
               }}
@@ -171,15 +199,13 @@ function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProp
   const playlists = result.playlists ?? [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       {tracks.length > 0 ? (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Tracks
-          </h2>
+          <SectionHeading title="Tracks" count={tracks.length} />
           <div className="space-y-1">
             {tracks.map((track, index) => (
-              <TrackRow key={track.id} track={track} index={index} onPlay={(t) => onPlayTrack(t)} />
+              <TrackRow key={track.id} track={track} index={index} onPlay={onPlayTrack} />
             ))}
           </div>
         </section>
@@ -187,10 +213,8 @@ function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProp
 
       {albums.length > 0 ? (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Albums
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SectionHeading title="Albums" count={albums.length} />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {albums.map((album) => (
               <AlbumCard key={album.id} album={album} onOpen={onOpenAlbum} />
             ))}
@@ -200,10 +224,8 @@ function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProp
 
       {artists.length > 0 ? (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Artists
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SectionHeading title="Artists" count={artists.length} />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {artists.map((artist) => (
               <ArtistCard key={artist.id} artist={artist} onOpen={onOpenArtist} />
             ))}
@@ -213,16 +235,25 @@ function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProp
 
       {playlists.length > 0 ? (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-            Playlists
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <SectionHeading title="Playlists" count={playlists.length} />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {playlists.map((playlist) => (
               <PlaylistCard key={playlist.id} playlist={playlist} />
             ))}
           </div>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+function SectionHeading({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="mb-4 flex items-baseline justify-between">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+        {title}
+      </h2>
+      <span className="text-xs tabular-nums text-[var(--color-text-muted)]">{count}</span>
     </div>
   );
 }

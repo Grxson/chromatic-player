@@ -26,9 +26,17 @@ export interface AuthState {
  * music backend. The UI layer must never depend on a concrete provider
  * implementation directly — it must depend on this interface.
  *
- * Concrete implementations live under `src/infrastructure/*` (e.g. TidalProvider,
- * MockMusicProvider). Future providers such as Jellyfin or local files will
- * implement the same port without requiring UI changes.
+ * Concrete implementations live under `src/infrastructure/*` (e.g.
+ * TidalProvider, MockMusicProvider). Future providers such as Jellyfin or
+ * local files will implement the same port without requiring UI changes.
+ *
+ * Scope:
+ * - The provider knows how to talk to a music service and reproduce a
+ *   single track at a time.
+ * - The provider does NOT own the queue or queue navigation
+ *   (`next` / `previous`). Queue ownership lives in the application
+ *   (`QueueStore` + `usePlayback`) so the UI keeps a single source of
+ *   truth regardless of which backend is active.
  */
 export interface MusicProvider {
   readonly name: string;
@@ -51,8 +59,6 @@ export interface MusicProvider {
   play(track: Track): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
-  next(): Promise<void>;
-  previous(): Promise<void>;
   seek(position: number): Promise<void>;
   setVolume(volume: number): Promise<void>;
 }

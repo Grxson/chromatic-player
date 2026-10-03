@@ -26,6 +26,9 @@ interface MockPlaybackSnapshot {
  * It does not produce audio. Playback calls only mutate the provider's
  * internal state; a real audio engine will replace this behaviour in a
  * later milestone.
+ *
+ * The provider deliberately exposes NO `next()` / `previous()`. Queue
+ * sequencing is owned by the application (`QueueStore` + `usePlayback`).
  */
 export class MockMusicProvider implements MusicProvider {
   readonly name = "mock";
@@ -67,7 +70,15 @@ export class MockMusicProvider implements MusicProvider {
     await this.#wait();
     const q = query.trim().toLowerCase();
     if (q.length === 0) {
-      return { query };
+      // Empty query doubles as "browse the catalogue" — convenient for
+      // mock surfaces (e.g. Home) without expanding MusicProvider yet.
+      return {
+        query,
+        tracks: mockTracks.slice(0, limit),
+        albums: mockAlbums.slice(0, limit),
+        artists: mockArtists.slice(0, limit),
+        playlists: mockPlaylists.slice(0, limit),
+      };
     }
 
     const tracks = mockTracks.filter((t) => t.title.toLowerCase().includes(q)).slice(0, limit);
@@ -76,7 +87,9 @@ export class MockMusicProvider implements MusicProvider {
 
     const artists = mockArtists.filter((a) => a.name.toLowerCase().includes(q)).slice(0, limit);
 
-    return { query, tracks, albums, artists };
+    const playlists = mockPlaylists.filter((p) => p.name.toLowerCase().includes(q)).slice(0, limit);
+
+    return { query, tracks, albums, artists, playlists };
   }
 
   async getTrack(id: string): Promise<Track> {
@@ -148,18 +161,6 @@ export class MockMusicProvider implements MusicProvider {
     if (this.#nowPlaying) {
       this.#isPlaying = true;
     }
-  }
-
-  async next(): Promise<void> {
-    await this.#wait();
-    // The mock has no real queue; the player store handles sequencing.
-    this.snapshot();
-  }
-
-  async previous(): Promise<void> {
-    await this.#wait();
-    // The mock has no real queue; the player store handles sequencing.
-    this.snapshot();
   }
 
   async seek(position: number): Promise<void> {

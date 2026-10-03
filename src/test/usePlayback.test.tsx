@@ -53,9 +53,9 @@ function makeProvider(): MockProvider {
     search: async () => ({ query: "" }),
     getTrack: async (id: string) => tracks.find((t) => t.id === id) ?? tracks[0]!,
     getAlbum: async (id: string) => {
-          const match = tracks.find((t) => t.id === id);
-          return (match ?? tracks[0]!).album!;
-        },
+      const match = tracks.find((t) => t.id === id);
+      return (match ?? tracks[0]!).album!;
+    },
     getArtist: async () => tracks[0]!.artist,
     getPlaylist: async () => ({
       id: "playlist-test",

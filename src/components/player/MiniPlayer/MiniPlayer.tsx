@@ -6,17 +6,18 @@ import { PlayerControls } from "@/components/player/PlayerControls";
 import { ProgressBar } from "@/components/player/ProgressBar";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { QueueButton } from "@/components/player/QueueButton";
-import { usePlayerStore } from "@/stores";
+import { usePlayback } from "@/hooks/usePlayback";
+import { usePlayerStore } from "@/stores/player.store";
+import { useQueueStore } from "@/stores/queue.store";
 
 export interface MiniPlayerProps {
   onExpand: () => void;
 }
 
 /**
- * Placeholder mini player. Until playback is wired it renders an empty
- * state when there is no current track, and a static representation
- * otherwise. This shape lets us validate the visual architecture without
- * a real audio engine.
+ * Mini player. It is intentionally presentational — every action goes
+ * through the playback layer (`usePlayback`) so the queue, the player
+ * store and the provider stay synchronised.
  */
 export function MiniPlayer({ onExpand }: MiniPlayerProps) {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
@@ -25,12 +26,10 @@ export function MiniPlayer({ onExpand }: MiniPlayerProps) {
   const duration = usePlayerStore((state) => state.duration);
   const volume = usePlayerStore((state) => state.volume);
 
-  const isPlaying = status === "playing";
+  const queueLength = useQueueStore((state) => state.tracks.length);
 
-  const handleTogglePlay = () => {
-    const { setStatus } = usePlayerStore.getState();
-    setStatus(isPlaying ? "paused" : "playing");
-  };
+  const playback = usePlayback();
+  const hasTrack = currentTrack !== null;
 
   return (
     <div className="flex h-full flex-col gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
@@ -39,21 +38,38 @@ export function MiniPlayer({ onExpand }: MiniPlayerProps) {
         <TrackMeta track={currentTrack} />
         <div className="flex-1" />
         <PlayerControls
-          isPlaying={isPlaying}
-          disabled={currentTrack === null}
-          onTogglePlay={handleTogglePlay}
-          onNext={() => undefined}
-          onPrevious={() => undefined}
+          isPlaying={status === "playing"}
+          disabled={!hasTrack}
+          onTogglePlay={() => {
+            void playback.togglePlay();
+          }}
+          onNext={() => {
+            void playback.next();
+          }}
+          onPrevious={() => {
+            void playback.previous();
+          }}
         />
         <div className="hidden items-center gap-2 md:flex">
-          <VolumeControl volume={volume} onVolumeChange={() => undefined} />
-          <QueueButton />
+          <VolumeControl
+            volume={volume}
+            onVolumeChange={(value) => {
+              void playback.setVolume(value);
+            }}
+          />
+          <QueueButton queueLength={queueLength} />
           <IconButton label="Fullscreen player" size="sm" tone="subtle" onClick={onExpand}>
             <Maximize2 size={16} aria-hidden="true" />
           </IconButton>
         </div>
       </div>
-      <ProgressBar position={position} duration={duration} onSeek={() => undefined} />
+      <ProgressBar
+        position={position}
+        duration={duration}
+        onSeek={(value) => {
+          void playback.seek(value);
+        }}
+      />
     </div>
   );
 }

@@ -1,16 +1,14 @@
 import { ListMusic } from "lucide-react";
 import { IconButton } from "@/components/common/IconButton";
-import { useQueueStore } from "@/stores";
 
 export interface QueueButtonProps {
+  queueLength: number;
   onOpen?: () => void;
 }
 
-export function QueueButton({ onOpen }: QueueButtonProps) {
-  const count = useQueueStore((state) => state.tracks.length);
-
+export function QueueButton({ queueLength, onOpen }: QueueButtonProps) {
   return (
-    <IconButton label={`Queue (${count})`} size="sm" tone="subtle" onClick={onOpen}>
+    <IconButton label={`Queue (${queueLength})`} size="sm" tone="subtle" onClick={onOpen}>
       <ListMusic size={16} aria-hidden="true" />
     </IconButton>
   );

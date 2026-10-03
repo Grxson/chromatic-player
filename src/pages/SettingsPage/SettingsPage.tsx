@@ -1,5 +1,6 @@
 import type { AudioQuality } from "@/stores";
-import { useSettingsStore } from "@/stores";
+import { usePlayerStore } from "@/stores/player.store";
+import { useSettingsStore } from "@/stores/settings.store";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { Slider } from "@/components/common/Slider";
@@ -7,8 +8,6 @@ import { Toggle } from "@/components/common/Toggle";
 
 export function SettingsPage() {
   const {
-    volume,
-    setVolume,
     animations,
     setAnimations,
     discordPresence,
@@ -18,6 +17,11 @@ export function SettingsPage() {
     audioQuality,
     setAudioQuality,
   } = useSettingsStore();
+
+  // The current volume lives on the PlayerStore because it is live
+  // playback state, not a persistent preference.
+  const volume = usePlayerStore((state) => state.volume);
+  const setVolume = usePlayerStore((state) => state.setVolume);
 
   return (
     <>

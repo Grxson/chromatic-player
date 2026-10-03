@@ -6,7 +6,8 @@ import { PlayerControls } from "@/components/player/PlayerControls";
 import { ProgressBar } from "@/components/player/ProgressBar";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { IconButton } from "@/components/common/IconButton";
-import { usePlayerStore } from "@/stores";
+import { usePlayback } from "@/hooks/usePlayback";
+import { usePlayerStore } from "@/stores/player.store";
 
 export interface FullscreenPlayerPageProps {
   onMinimize: () => void;
@@ -18,6 +19,9 @@ export function FullscreenPlayerPage({ onMinimize }: FullscreenPlayerPageProps) 
   const position = usePlayerStore((state) => state.position);
   const duration = usePlayerStore((state) => state.duration);
   const volume = usePlayerStore((state) => state.volume);
+
+  const playback = usePlayback();
+  const hasTrack = track !== null;
 
   return (
     <>
@@ -48,16 +52,33 @@ export function FullscreenPlayerPage({ onMinimize }: FullscreenPlayerPageProps) 
             </p>
           </div>
           <div className="w-full max-w-md">
-            <ProgressBar position={position} duration={duration} onSeek={() => undefined} />
+            <ProgressBar
+              position={position}
+              duration={duration}
+              onSeek={(value) => {
+                void playback.seek(value);
+              }}
+            />
           </div>
           <PlayerControls
             isPlaying={status === "playing"}
-            disabled={track === null}
-            onTogglePlay={() => undefined}
-            onNext={() => undefined}
-            onPrevious={() => undefined}
+            disabled={!hasTrack}
+            onTogglePlay={() => {
+              void playback.togglePlay();
+            }}
+            onNext={() => {
+              void playback.next();
+            }}
+            onPrevious={() => {
+              void playback.previous();
+            }}
           />
-          <VolumeControl volume={volume} onVolumeChange={() => undefined} />
+          <VolumeControl
+            volume={volume}
+            onVolumeChange={(value) => {
+              void playback.setVolume(value);
+            }}
+          />
         </div>
       </Content>
     </>

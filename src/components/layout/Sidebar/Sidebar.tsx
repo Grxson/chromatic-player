@@ -94,7 +94,7 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="px-3 py-3 text-xs text-[var(--color-text-muted)]">
-        {!collapsed ? "v0.0.1 — Foundation" : "v0.0.1"}
+        {!collapsed ? "v0.0.2 — Foundation Hardening" : "v0.0.2"}
       </div>
     </aside>
   );

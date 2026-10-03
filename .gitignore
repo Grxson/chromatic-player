@@ -7,14 +7,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node / pnpm
 node_modules
 dist
 dist-ssr
 *.local
+.pnpm-store
+
+# Build artifacts
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea
 .DS_Store
 *.suo
@@ -22,3 +28,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Rust / Tauri (also ignored inside src-tauri/.gitignore)
+target
+**/target/
+
+# Generated Tauri schemas (resolved by the Tauri CLI)
+**/gen/schemas/

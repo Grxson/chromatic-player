@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend (lint, typecheck, format, build)
+    name: Frontend (lint, typecheck, format, test, build)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -53,6 +53,9 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Test
+        run: pnpm test
+
       - name: Build frontend
         run: pnpm build
 
@@ -71,14 +74,16 @@ jobs:
       # the frontend bundle and `cargo check --locked` validates the
       # Rust shell against the committed Cargo.lock.
       # Once a real desktop distribution pipeline is required, this job
-      # will be expanded with the proper matrix.
+      # grows a proper matrix with WebView2/NSIS on Windows and WebKitGTK
+      # on Linux.
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
 
       # Native packages required to compile `wry` / `tao` and their
-      # transitive dependencies on Ubuntu. Pinned to webkit2gtk-4.1
-      # because Tauri 2 requires GTK 4 + the matching WebKit.
+      # transitive dependencies on Ubuntu. Tauri 2 links against
+      # WebKitGTK API 4.1 (not 4.0), GTK 3 and the AppIndicator
+      # library, so all of them must be available on the runner.
       - name: Install Tauri 2 system dependencies (Ubuntu)
         run: |
           sudo apt-get update

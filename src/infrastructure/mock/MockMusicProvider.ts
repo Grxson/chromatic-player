@@ -81,9 +81,17 @@ export class MockMusicProvider implements MusicProvider {
       };
     }
 
-    const tracks = mockTracks.filter((t) => t.title.toLowerCase().includes(q)).slice(0, limit);
+    const tracks = mockTracks
+      .filter((t) => t.title.toLowerCase().includes(q) || t.artist.name.toLowerCase().includes(q))
+      .slice(0, limit);
 
-    const albums = mockAlbums.filter((a) => a.title.toLowerCase().includes(q)).slice(0, limit);
+    const albums = mockAlbums
+      .filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.artists.some((ar) => ar.name.toLowerCase().includes(q)),
+      )
+      .slice(0, limit);
 
     const artists = mockArtists.filter((a) => a.name.toLowerCase().includes(q)).slice(0, limit);
 

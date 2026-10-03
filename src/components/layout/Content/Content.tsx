@@ -6,10 +6,11 @@ export interface ContentProps {
 
 /**
  * Scrollable content area below the header and above the mini player.
- * Kept intentionally minimal — visual rhythm comes from each view.
+ * Visual rhythm comes from each view; the content surface itself
+ * stays neutral.
  */
 export function Content({ children }: ContentProps) {
   return (
-    <main className="flex-1 overflow-y-auto bg-[var(--color-canvas)] px-6 py-6">{children}</main>
+    <main className="flex-1 overflow-y-auto bg-[var(--color-canvas)] px-8 pb-10">{children}</main>
   );
 }

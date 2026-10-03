@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useSettingsStore } from "@/stores";
 import { IconButton } from "@/components/common/IconButton";
 import { Tooltip } from "@/components/common/Tooltip";
+import { cn } from "@/utils/cn";
 
 export type ViewKey = "home" | "search" | "library" | "settings";
 
@@ -40,18 +41,48 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
   const collapsed = useSettingsStore((state) => state.sidebarCollapsed);
   const setCollapsed = useSettingsStore((state) => state.setSidebarCollapsed);
 
-  const widthClass = collapsed ? "w-16" : "w-60";
+  const widthClass = collapsed ? "w-[68px]" : "w-[232px]";
 
   return (
     <aside
-      className={`flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-canvas)] transition-[width] duration-200 ${widthClass}`}
+      className={cn(
+        "flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-canvas)] transition-[width] duration-200 ease-out",
+        widthClass,
+      )}
     >
-      <div className="flex items-center justify-between px-3 py-3">
-        {!collapsed ? (
-          <span className="truncate text-sm font-semibold tracking-wide text-[var(--color-text-primary)]">
-            Chromatic
-          </span>
-        ) : null}
+      <div className="flex h-14 items-center px-4">
+        <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
+          <BrandMark />
+          {!collapsed ? (
+            <span className="select-none text-sm font-semibold tracking-[0.18em] text-[var(--color-text-primary)]">
+              CHROMATIC
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+        {navItems.map((item) => (
+          <SidebarItem
+            key={item.key}
+            item={item}
+            active={currentView === item.key}
+            collapsed={collapsed}
+            onSelect={() => onNavigate(item.key)}
+          />
+        ))}
+      </nav>
+
+      <div className="flex h-12 items-center justify-between border-t border-[var(--color-border)] px-3 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+        {collapsed ? (
+          <Tooltip label="v0.0.3 — Visual Prototype">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px]">
+              v
+            </span>
+          </Tooltip>
+        ) : (
+          <span className="truncate">v0.0.3</span>
+        )}
         <Tooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
           <IconButton
             label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -62,40 +93,59 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
             <PanelLeftClose
               size={16}
               aria-hidden="true"
-              className={collapsed ? "rotate-180 transition-transform" : "transition-transform"}
+              className={cn("transition-transform duration-200", collapsed ? "rotate-180" : "")}
             />
           </IconButton>
         </Tooltip>
       </div>
-
-      <nav className="flex flex-1 flex-col gap-1 px-2">
-        {navItems.map((item) => {
-          const active = currentView === item.key;
-          const baseClasses =
-            "flex items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors duration-150";
-          const stateClasses = active
-            ? "bg-[var(--color-surface-2)] text-[var(--color-text-primary)]"
-            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]";
-          const labelClasses = collapsed ? "sr-only" : "truncate";
-
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onNavigate(item.key)}
-              className={`${baseClasses} ${stateClasses}`}
-              aria-current={active ? "page" : undefined}
-            >
-              <span className="inline-flex w-5 items-center justify-center">{item.icon}</span>
-              <span className={labelClasses}>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      <div className="px-3 py-3 text-xs text-[var(--color-text-muted)]">
-        {!collapsed ? "v0.0.2 — Foundation Hardening" : "v0.0.2"}
-      </div>
     </aside>
+  );
+}
+
+function SidebarItem({
+  item,
+  active,
+  collapsed,
+  onSelect,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  onSelect: () => void;
+}) {
+  const button = (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-current={active ? "page" : undefined}
+      aria-label={item.label}
+      className={cn(
+        "group flex h-9 items-center gap-3 rounded-md px-2 text-sm transition-colors duration-150",
+        collapsed ? "justify-center" : "",
+        active
+          ? "bg-[var(--color-surface-2)] text-[var(--color-text-primary)]"
+          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]",
+      )}
+    >
+      <span className="inline-flex h-5 w-5 items-center justify-center">{item.icon}</span>
+      {!collapsed ? <span className="truncate">{item.label}</span> : null}
+    </button>
+  );
+
+  return collapsed ? <Tooltip label={item.label}>{button}</Tooltip> : button;
+}
+
+function BrandMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-album-accent)]/15 text-[var(--color-album-accent)]"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4">
+        <circle cx="12" cy="12" r="9" fill="currentColor" opacity="0.18" />
+        <circle cx="12" cy="12" r="5" fill="currentColor" opacity="0.45" />
+        <circle cx="12" cy="12" r="2.2" fill="currentColor" />
+      </svg>
+    </span>
   );
 }

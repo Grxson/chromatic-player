@@ -2,14 +2,16 @@
 
 A lightweight chromatic desktop music player powered by **TIDAL**.
 
-> **Current release: v0.0.3 — Visual Prototype.** This release turns
-> the foundation into the first serious visual experience of Chromatic
-> Player: a refined Chromatic Dark design system, an album-reactive
-> chromatic atmosphere, redesigned Home / Album / Artist / Search /
-> Library / Settings surfaces, a context-aware mock playback queue,
-> a Queue drawer, a redesigned Mini Player and an immersive
-> Fullscreen Player with mock lyrics. It does **not** connect to
-> TIDAL, does **not** play audio, and still ships a mock data layer.
+> **Current release: v0.0.4 — Visual QA & Interaction Hardening.**
+> This release is a hardening pass on top of v0.0.3: queue cursor and
+> current-track removal are now consistent, playback failure paths
+> restore the previous state, the Fullscreen browser returns to the
+> previous page, the Search stale-result guard is exercised against the
+> real page, mute remembers the previous volume, motion respects
+> `prefers-reduced-motion` and `settings.animations`, and the desktop
+> keyboard shortcuts are wired through a single hook. It does **not**
+> connect to TIDAL, does **not** play audio, and still ships a mock
+> data layer.
 
 ---
 
@@ -21,16 +23,18 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 | Styling           | ✅ Tailwind CSS + Chromatic Dark                                      |
 | State             | ✅ Zustand stores                                                     |
 | Icons             | ✅ Lucide React                                                       |
-| Motion            | ✅ Motion (reserved, minimal use)                                     |
+| Motion            | ✅ Motion (respects `prefers-reduced-motion` + `settings.animations`) |
 | Architecture      | ✅ Presentation → Application → Domain → Infrastructure               |
 | Music provider    | ⚠️ `MusicProvider` port + `MockMusicProvider` (TidalProvider pending) |
-| Playback          | ✅ Mock playback via `usePlayback` (contextual queue + statuses)      |
+| Playback          | ✅ `usePlayback` (contextual queue, status lifecycle, rollback)       |
 | Chromatic Engine  | ✅ Album-reactive palette mapped to CSS custom properties             |
 | Mock navigation   | ✅ Album / Artist pages driven by `route.id` and provider             |
-| Mock search       | ✅ Provider-backed, stale-result safe                                 |
-| Queue drawer      | ✅ Now playing + next-up, remove / clear / jump                       |
+| Mock search       | ✅ Provider-backed, stale-result safe, real-page tests                |
+| Queue drawer      | ✅ Now playing + next-up, remove / clear / jump / focus restoration   |
 | Library           | ✅ Liked tracks, saved albums, followed artists, playlists            |
-| Fullscreen Player | ✅ Cinematic layout + atmospheric glow + mock lyrics                  |
+| Mini Player       | ✅ Status-aware current-track styling                                 |
+| Fullscreen Player | ✅ Status-aware, chromatically reactive, mock lyrics                  |
+| Keyboard          | ✅ Space, Arrow keys, M (mute), F (fullscreen), Q (queue), Escape     |
 | TIDAL API         | 🚧 Reserved                                                           |
 | Distribution      | 🚧 Reserved                                                           |
 
@@ -44,7 +48,7 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 - **Vite** — bundler and dev server
 - **Tailwind CSS 4** — styling
 - **Zustand** — client state
-- **Motion** — minimal motion
+- **Motion** — minimal motion (respects reduced-motion)
 - **Lucide React** — iconography
 - **Vitest** — unit / integration tests
 - **pnpm** — package manager
@@ -53,10 +57,10 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 
 ## Architecture
 
-Chromatic Player follows a deliberately lightweight layered architecture:
-
 ```
 React UI
+   ↓
+usePlayerShortcuts / useMotionPreference
    ↓
 usePlayback (src/hooks/usePlayback.ts)
    ↓
@@ -67,26 +71,20 @@ MusicProvider  ←  port
 TidalProvider / MockMusicProvider  ←  adapters
 ```
 
-The UI never depends on a concrete provider. The `MusicProvider`
-interface is the only abstraction the application uses to talk to any
-music backend. Concrete implementations live under
-`src/infrastructure/*`.
+`usePlayback` is the single coordination layer. Components must never
+call `MusicProvider.play` directly, never mutate the cursor via
+`useQueueStore.setState`, and never mutate `PlayerStore.currentTrack`
+on their own. They go through the hook so the three layers stay
+synchronised even when a provider call fails.
 
-```
-Presentation  →  src/components, src/pages, src/app
-Application   →  src/stores, src/hooks, src/app/providers, src/app/router
-Domain        →  src/domain/entities, src/domain/ports, src/domain/models
-Infrastructure →  src/infrastructure/tidal, src/infrastructure/mock, src/infrastructure/storage
-Features      →  src/features/chromatic, src/features/queue, src/features/library
-```
-
-More detail in [`docs/architecture/README.md`](docs/architecture/README.md).
+For the full architecture overview see
+[`docs/architecture/README.md`](docs/architecture/README.md).
 
 ---
 
 ## Requirements
 
-- **Node** ≥ 20
+- **Node** ≥ 20 (CI uses 22)
 - **pnpm** ≥ 10
 - **Rust** stable + `cargo` (for `pnpm tauri dev` / `pnpm tauri build`)
 - Platform build deps for Tauri:
@@ -149,6 +147,24 @@ pnpm test:watch      # Vitest in watch mode
 
 ---
 
+## Keyboard shortcuts
+
+| Key          | Action                                           |
+| ------------ | ------------------------------------------------ |
+| `Space`      | Toggle play / pause                              |
+| `ArrowRight` | Seek +5 seconds                                  |
+| `ArrowLeft`  | Seek -5 seconds (clamped to 0)                   |
+| `M`          | Toggle mute (remembers previous volume)          |
+| `F`          | Toggle fullscreen player                         |
+| `Q`          | Toggle queue drawer                              |
+| `Escape`     | Close queue → otherwise close fullscreen → no-op |
+
+Shortcuts are ignored while the focus is inside an `input`,
+`textarea`, `select` or `contenteditable` element (typing in Search
+does not trigger transport actions).
+
+---
+
 ## Project structure
 
 ```text
@@ -164,9 +180,9 @@ chromatic-player/
 │   ├── features/           Chromatic Engine, queue drawer, library tabs
 │   ├── stores/             Zustand stores
 │   ├── pages/              Route-level views
-│   ├── mocks/              Mock data (used by MockMusicProvider)
+│   ├── mocks/              Mock data + chromatic palettes + lyrics
 │   ├── styles/             Global CSS + design tokens
-│   ├── hooks/              Reusable hooks (usePlayback, useAsyncResource)
+│   ├── hooks/              usePlayback, useAsyncResource, usePlayerShortcuts, …
 │   ├── types/              Cross-cutting type helpers
 │   ├── utils/              Pure utility functions
 │   └── test/               Vitest tests
@@ -181,7 +197,8 @@ chromatic-player/
 | ------- | -------------------------------------------------------------- |
 | v0.0.1  | Foundation                                                     |
 | v0.0.2  | Foundation Hardening                                           |
-| v0.0.3  | Visual Prototype (current)                                     |
+| v0.0.3  | Visual Prototype                                               |
+| v0.0.4  | Visual QA & Interaction Hardening (current)                    |
 | v0.1.0  | Core Player (real audio, queue, library)                       |
 | v0.2.0  | Desktop Integration (media keys, MPRIS, Windows Media Session) |
 | v0.3.0  | Experience (lyrics, Chromatic palette, visual polish)          |

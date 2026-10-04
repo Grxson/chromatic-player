@@ -75,13 +75,13 @@ export function Sidebar({ currentView, onNavigate }: SidebarProps) {
 
       <div className="flex h-12 items-center justify-between border-t border-[var(--color-border)] px-3 text-[10px] uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
         {collapsed ? (
-          <Tooltip label="v0.0.3 — Visual Prototype">
+          <Tooltip label="v0.0.4 — Visual QA & Interaction Hardening">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px]">
               v
             </span>
           </Tooltip>
         ) : (
-          <span className="truncate">v0.0.3</span>
+          <span className="truncate">v0.0.4</span>
         )}
         <Tooltip label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
           <IconButton

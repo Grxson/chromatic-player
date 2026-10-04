@@ -28,41 +28,43 @@ Infrastructure
 
 ### Presentation
 
-Everything that renders UI. Lives under `src/components/`, `src/pages/`
-and `src/app/`. Components must be free of business logic. They consume
-stores via hooks and call the application layer.
+Components in `src/components/` and `src/pages/` are presentational and
+free of business logic. They consume stores via hooks and call the
+application layer.
 
 ### Application
 
-Coordination layer. Contains Zustand stores (`src/stores/`), the router
-context (`src/app/router/`), the provider context
-(`src/app/providers/`) and cross-cutting hooks (`src/hooks/`).
-Translates user intent into provider calls and keeps the UI reactive.
+Coordination layer in `src/stores/`, `src/hooks/`, `src/app/providers/`
+and `src/app/router/`. Translates user intent into provider calls and
+keeps the UI reactive.
 
 ### Domain
 
-Pure types and contracts. The only dependencies allowed are from this
-layer itself. The `MusicProvider` interface is the sole seam between the
-application and any concrete music backend.
+Pure types and contracts in `src/domain/`. The `MusicProvider`
+interface is the sole seam between the application and any concrete
+music backend. The domain has no dependency on infrastructure.
 
 ### Infrastructure
 
-Concrete adapters that implement the domain ports. Today this is
-`MockMusicProvider`. Future providers (TidalProvider, local files,
-etc.) will live here as siblings and never leak into the UI.
+Concrete adapters in `src/infrastructure/`. `MockMusicProvider`
+implements the full port against static data. `TidalProvider` will
+arrive in a later release.
 
 ### Features
 
-Feature-shaped surfaces that cut across the layers: the mock Chromatic
-Engine, the Queue drawer and the Library tabs. They own their UI and
-state but never bypass the application or domain layers.
+Feature-shaped surfaces that cut across the layers: `src/features/chromatic/`
+owns the Chromatic Engine, `src/features/queue/` owns the Queue drawer,
+`src/features/library/` hosts the Library tabs. They consume
+application + domain layers — they never add features.
 
 ## Provider seam
 
 ```
 React UI
    ↓
-usePlayback hook (src/hooks/usePlayback.ts)
+usePlayerShortcuts / useMotionPreference
+   ↓
+usePlayback (src/hooks/usePlayback.ts)
    ↓
 QueueStore + PlayerStore (src/stores/)
    ↓
@@ -74,20 +76,20 @@ TidalProvider / MockMusicProvider  ←  adapters
 The application never imports from `src/infrastructure/tidal` or
 `src/infrastructure/mock` directly except through provider composition
 in `src/app/providers/`. This keeps the UI agnostic about which backend
-is active and makes future migrations straightforward.
+is active.
 
 ## Playback coordination
 
-Single track playback (play / pause / resume / seek / volume) is
-delegated to the provider. Queue navigation (next / previous /
-jumpTo / enqueue / clear) is owned by `QueueStore`. Both are wired
-together by `usePlayback` so the UI calls one method and the rest of
-the system stays consistent.
+Single track playback (`play` / `pause` / `resume` / `seek` / `setVolume`)
+is delegated to the provider. Queue navigation (`enqueue` / `removeAt` /
+`clear` / `moveNext` / `movePrevious` / `jumpTo`) is owned by
+`QueueStore`. Both are wired together by `usePlayback` so the UI calls
+one method and the rest of the system stays consistent.
 
 ```
 UI component
    ↓
-usePlayback.playTrack(track) / .playQueue(tracks, i) / .next() / .seek(position) / .setVolume(v)
+usePlayback.playTrack(track) / .playQueue(tracks, i) / .playQueueIndex(i) / .next() / .seek(position) / .setVolume(v)
    ↓
 QueueStore      ← cursor + tracks
 Provider        ← single-track transport
@@ -100,7 +102,7 @@ they never compute next-track indexes themselves.
 
 ### Status lifecycle
 
-`PlayerStore.status` moves through the following states:
+`PlayerStore.status` moves through:
 
 ```
 idle ─► loading ─► playing
@@ -111,18 +113,50 @@ idle ─► loading ─► playing
 ```
 
 Every `usePlayback` action transitions to `loading` before calling the
-provider, then to `playing` / `paused` / `error` based on the outcome.
-On `error`, the previous track stays in the store so the UI keeps its
-context; only the status flips.
+provider and then resolves to `playing` / `paused` / `error`. On error,
+the previous player snapshot is restored: the queue stays mutated,
+the requested track stays visible, the status flips to `error` and a
+short message lands in `PlayerStore.error`. The `clearQueue`,
+`removeFromQueue` and `pause` paths handle the queue-empty case.
+
+### Removal of the current track
+
+`usePlayback.removeFromQueue(index)` is the only place that mutates
+playback in response to a removal. Behaviour:
+
+- Non-current track → cursor adjusts, playback untouched.
+- Current track + next exists → cursor lands on the next, provider plays.
+- Current track + only remaining → cursor goes to the previous, provider plays.
+- Current track + last track → pause + reset player to idle.
+
+### Mute memory
+
+`useMuteMemory` is a tiny helper that stashes the previous volume
+across mute toggles so the user does not lose their audio level when
+they press `M`.
 
 ## Chromatic Engine
 
-`useChromaticTheme` (in `src/features/chromatic/`) is a thin hook that
-maps the current `albumId` to a `ChromaticPalette` and writes the
-palette to the document root as CSS custom properties
-(`--chromatic-hue`, `--album-dominant`, `--album-accent`, `--chromatic-glow-primary`, …).
-Today the palette table lives in `src/features/chromatic/chromatic.mock.ts`.
-When real colour extraction arrives, only that file changes.
+`useChromaticTheme` (in `src/features/chromatic/`) maps the current
+`albumId` to a `ChromaticPalette` and writes the palette to the
+document root as CSS custom properties (`--chromatic-hue`,
+`--chromatic-glow-primary`, `--album-dominant`, …). The hook is
+idempotent: DOM writes only happen when the palette identity changes.
+
+## Keyboard shortcuts
+
+`usePlayerShortcuts` (in `src/hooks/`) wires the desktop keyboard
+shortcuts (`Space` / `Arrow` / `M` / `F` / `Q` / `Escape`) to the
+playback layer. The hook always reads the latest `queueOpen` and
+`route` through refs so successive events see the freshest values.
+
+Escape priority is fixed:
+
+```
+Escape: queue closed first → otherwise fullscreen closed → no-op
+```
+
+Shortcuts are ignored while the focus is inside an editable control.
 
 ## Folder layout
 
@@ -147,7 +181,7 @@ src/
 │   ├── queue/           # Queue drawer
 │   └── library/         # Library tabs
 ├── stores/              # auth, player, queue, library, settings
-├── hooks/               # usePlayback, useAsyncResource, useRouter, useChromaticTheme
+├── hooks/               # usePlayback, useAsyncResource, usePlayerShortcuts, …
 ├── pages/               # Route-level views
 ├── mocks/               # Static mock data + artwork + chromatic palettes
 ├── styles/              # Global CSS + design tokens
@@ -160,8 +194,11 @@ src/
 
 - **Domain stays pure.** No TIDAL types inside `src/domain/`.
 - **UI never talks to providers directly.** Always through `usePlayback`.
-- **Visual metadata lives in `src/features/chromatic/`, not on entities.**
-- **No premature abstractions.** Add a port when there are at least two
-  implementations or a real need to test in isolation.
+- **No direct `setState` on the stores from `usePlayback`.** The hook
+  goes through the public actions of `QueueStore` (`enqueue`, `jumpTo`,
+  `removeAt`, `clear`) and `PlayerStore` (`setCurrentTrack`,
+  `setStatus`, `setPosition`, `setDuration`, `setError`).
+- **Visual metadata lives in `src/features/chromatic/`** — never on the
+  domain entities.
 - **Rust is the bridge, not the brain.** Keep Rust minimal and use it
   only for things that genuinely belong in the OS layer.

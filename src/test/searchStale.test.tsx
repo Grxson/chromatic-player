@@ -1,86 +1,52 @@
 import { act, render, waitFor } from "@testing-library/react";
-import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState, type ReactNode } from "react";
 import { MusicProviderContext } from "@/app/providers/useMusicProvider";
-import type { MusicProvider, SearchResult } from "@/domain/ports";
-import type { ReactNode } from "react";
+import type { MusicProvider } from "@/domain/ports";
+import { RouterContext } from "@/app/router/useRouter";
+import type { Route } from "@/app/router/router";
+import { SearchPage } from "@/pages/SearchPage";
 
-/**
- * Tiny inline copy of the page-level state machine used by SearchPage.
- * We deliberately keep this inside the test so we exercise the same
- * sequence counter pattern without depending on the page's internals.
- */
-function useSearchState(provider: MusicProvider) {
-  const [state, setState] = useState<{
-    phase: "idle" | "loading" | "results" | "empty" | "error";
-    query: string;
-    result: SearchResult | null;
-  }>({ phase: "idle", query: "", result: null });
-  const sequenceRef = { current: 0 };
-
-  const runSearch = async (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length === 0) {
-      sequenceRef.current += 1;
-      setState({ phase: "idle", query: "", result: null });
-      return;
-    }
-    const requestId = sequenceRef.current + 1;
-    sequenceRef.current = requestId;
-    setState({ phase: "loading", query: trimmed, result: null });
-    try {
-      const result = await provider.search(trimmed, 10);
-      if (sequenceRef.current !== requestId) {
-        return;
-      }
-      setState({
-        phase: (result.tracks?.length ?? 0) > 0 ? "results" : "empty",
-        query: trimmed,
-        result,
-      });
-    } catch {
-      // ignored for this focused test
-    }
-  };
-
-  return { state, runSearch, sequenceRef };
-}
-
-interface HarnessProps {
-  provider: MusicProvider;
-}
-
-function Harness({ provider }: HarnessProps) {
-  const { state, runSearch, sequenceRef } = useSearchState(provider);
-  void sequenceRef;
+function ControlledRouter({ children }: { children: ReactNode }) {
+  const [route, setRoute] = useState<Route>({ type: "view", view: "search" });
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => {
-          void runSearch("first");
-        }}
-      >
-        first
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          void runSearch("second");
-        }}
-      >
-        second
-      </button>
-      <span data-testid="phase">{state.phase}</span>
-      <span data-testid="query">{state.query}</span>
-      <span data-testid="data">{state.result?.tracks?.map((t) => t.id).join(",") ?? ""}</span>
-    </div>
+    <RouterContext.Provider
+      value={{
+        route,
+        navigate: (next) => {
+          setRoute(next);
+        },
+      }}
+    >
+      {children}
+    </RouterContext.Provider>
   );
 }
 
-function withProvider(provider: MusicProvider) {
-  return ({ children }: { children: ReactNode }) => (
-    <MusicProviderContext.Provider value={{ provider }}>{children}</MusicProviderContext.Provider>
+/**
+ * We avoid exercising the real `usePlayback` against the deferred provider.
+ * `SearchPage` calls `playback.playTrack(...)` when a track is clicked,
+ * which would race against the deferred `provider.search`. For this test
+ * we only care about the search UI, so we mount a tiny no-op
+ * `usePlayback` shim via a separate provider replacement.
+ */
+function NoopPlaybackHarness({
+  provider,
+  children,
+}: {
+  provider: MusicProvider;
+  children: ReactNode;
+}) {
+  // The provider we want to test, but with a no-op playTrack mock so the
+  // search results UI does not call into the deferred pipeline.
+  const wrapped: MusicProvider = {
+    ...provider,
+    play: vi.fn(async () => undefined),
+  };
+  return (
+    <MusicProviderContext.Provider value={{ provider: wrapped }}>
+      <ControlledRouter>{children}</ControlledRouter>
+    </MusicProviderContext.Provider>
   );
 }
 
@@ -88,20 +54,22 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-describe("SearchPage sequence counter", () => {
-  it("keeps the most recent search and drops stale results", async () => {
-    let firstResolve: (value: SearchResult) => void = () => undefined;
-    let secondResolve: (value: SearchResult) => void = () => undefined;
+describe("SearchPage stale-result handling", () => {
+  it("keeps the latest results when an earlier query resolves later", async () => {
+    let firstResolve: (value: Awaited<ReturnType<MusicProvider["search"]>>) => void = () =>
+      undefined;
+    let secondResolve: (value: Awaited<ReturnType<MusicProvider["search"]>>) => void = () =>
+      undefined;
 
     const firstSearch = vi.fn(
       () =>
-        new Promise<SearchResult>((resolve) => {
+        new Promise<Awaited<ReturnType<MusicProvider["search"]>>>((resolve) => {
           firstResolve = resolve;
         }),
     );
     const secondSearch = vi.fn(
       () =>
-        new Promise<SearchResult>((resolve) => {
+        new Promise<Awaited<ReturnType<MusicProvider["search"]>>>((resolve) => {
           secondResolve = resolve;
         }),
     );
@@ -132,44 +100,76 @@ describe("SearchPage sequence counter", () => {
       getAlbumTracks: async () => [],
       getArtistAlbums: async () => [],
       getPlaylistTracks: async () => [],
-      play: async () => undefined,
-      pause: async () => undefined,
-      resume: async () => undefined,
-      seek: async () => undefined,
-      setVolume: async () => undefined,
+      play: vi.fn(async () => undefined),
+      pause: vi.fn(async () => undefined),
+      resume: vi.fn(async () => undefined),
+      seek: vi.fn(async () => undefined),
+      setVolume: vi.fn(async () => undefined),
     };
 
-    const { getByTestId } = render(<Harness provider={provider} />, {
-      wrapper: withProvider(provider),
+    const { getByPlaceholderText, queryByText } = render(
+      <NoopPlaybackHarness provider={provider}>
+        <SearchPage />
+      </NoopPlaybackHarness>,
+    );
+
+    const input = getByPlaceholderText("Search tracks, albums, artists…") as HTMLInputElement;
+
+    // Trigger the first search by typing the first character.
+    await act(async () => {
+      const native = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+      native?.set?.call(input, "first");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    // Fire both searches. The second one starts before the first
-    // resolves — classic stale-result scenario.
-    await act(async () => {
-      const firstButton = document.querySelectorAll("button")[0];
-      firstButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      const secondButton = document.querySelectorAll("button")[1];
-      secondButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    // Wait for the debounce + dispatch.
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
-    // The first promise resolves AFTER the second one was started.
+    // While the first request is still pending, type the second query.
     await act(async () => {
-      firstResolve({
-        query: "first",
-        tracks: [{ id: "stale-track" } as never],
-      });
+      const native = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value");
+      native?.set?.call(input, "second");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    // Resolve them in REVERSE chronological order: first the new one,
+    // then the stale one. Only the fresh result must be visible.
+    await act(async () => {
       secondResolve({
         query: "second",
-        tracks: [{ id: "fresh-track" } as never],
+        tracks: [
+          {
+            id: "fresh-track",
+            title: "Fresh",
+            duration: 1,
+            artist: { id: "a1", name: "Fresh Artist" },
+          },
+        ],
+        albums: [],
+      });
+      firstResolve({
+        query: "first",
+        tracks: [
+          {
+            id: "stale-track",
+            title: "Stale",
+            duration: 1,
+            artist: { id: "a1", name: "Stale Artist" },
+          },
+        ],
+        albums: [],
       });
     });
 
     await waitFor(() => {
-      expect(getByTestId("phase").textContent).toBe("results");
+      expect(queryByText("Stale")).toBeNull();
     });
-    expect(getByTestId("data").textContent).toContain("fresh-track");
-    expect(getByTestId("data").textContent).not.toContain("stale-track");
-    expect(getByTestId("query").textContent).toBe("second");
+    // The fresh title must surface via the search results section.
+    expect(queryByText("Fresh")).not.toBeNull();
+
+    // 4 actions of search() were called across two debounce cycles.
+    expect(firstSearch).toHaveBeenCalledTimes(1);
+    expect(secondSearch).toHaveBeenCalledTimes(1);
   });
 });

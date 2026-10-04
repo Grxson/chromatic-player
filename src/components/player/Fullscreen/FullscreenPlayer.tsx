@@ -8,18 +8,14 @@ import { VolumeControl } from "@/components/player/VolumeControl";
 import { Header } from "@/components/layout/Header";
 import { usePlayerStore } from "@/stores/player.store";
 import { usePlayback } from "@/hooks/usePlayback";
+import { useMuteMemory } from "@/hooks/useMuteMemory";
+import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { lyricsFor } from "@/mocks/lyrics/lyrics";
 import { cn } from "@/utils/cn";
 
 export interface FullscreenPlayerProps {
   onMinimize: () => void;
 }
-
-const FADE = {
-  initial: { opacity: 0, scale: 0.985 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 1.005 },
-} as const;
 
 export function FullscreenPlayer({ onMinimize }: FullscreenPlayerProps) {
   const track = usePlayerStore((state) => state.currentTrack);
@@ -28,6 +24,8 @@ export function FullscreenPlayer({ onMinimize }: FullscreenPlayerProps) {
   const duration = usePlayerStore((state) => state.duration);
   const volume = usePlayerStore((state) => state.volume);
   const playback = usePlayback();
+  const mute = useMuteMemory();
+  const { motionEnabled } = useMotionPreference();
 
   const hasTrack = track !== null;
   const isPlaying = status === "playing";
@@ -45,12 +43,26 @@ export function FullscreenPlayer({ onMinimize }: FullscreenPlayerProps) {
     return Math.min(lyrics.length - 1, Math.floor(ratio * lyrics.length));
   }, [lyrics.length, position, duration]);
 
+  const fade = motionEnabled
+    ? {
+        initial: { opacity: 0, scale: 0.985 },
+        animate: { opacity: 1, scale: 1 },
+        exit: { opacity: 0, scale: 1.005 },
+        transition: { duration: 0.22, ease: [0.32, 0.72, 0, 1] as const },
+      }
+    : {
+        initial: { opacity: 1, scale: 1 },
+        animate: { opacity: 1, scale: 1 },
+        exit: { opacity: 1, scale: 1 },
+        transition: { duration: 0 },
+      };
+
   return (
     <motion.section
-      initial={FADE.initial}
-      animate={FADE.animate}
-      exit={FADE.exit}
-      transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+      initial={fade.initial}
+      animate={fade.animate}
+      exit={fade.exit}
+      transition={fade.transition}
       className="relative flex h-full w-full flex-col overflow-hidden bg-[var(--color-canvas)]"
       data-state={status}
     >
@@ -68,7 +80,7 @@ export function FullscreenPlayer({ onMinimize }: FullscreenPlayerProps) {
           }
         />
 
-        <div className="flex flex-1 flex-col items-center justify-center gap-10 px-8 pb-10 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
+        <div className="flex flex-1 flex-col items-center justify-center gap-10 overflow-y-auto px-8 pb-10 lg:flex-row lg:items-center lg:justify-center lg:gap-16">
           {hasTrack ? (
             <ArtworkPanel
               title={track.title}
@@ -96,6 +108,10 @@ export function FullscreenPlayer({ onMinimize }: FullscreenPlayerProps) {
             <div className="hidden md:block">
               <VolumeControl
                 volume={volume}
+                muted={mute.muted}
+                onToggleMute={() => {
+                  void mute.toggle();
+                }}
                 onVolumeChange={(value) => {
                   void playback.setVolume(value);
                 }}
@@ -247,28 +263,41 @@ function LyricsPanel({ lines, currentIndex, isPlaying }: LyricsPanelProps) {
   const current = currentIndex >= 0 ? lines[currentIndex] : lines[0];
 
   return (
-    <div className="flex w-full max-w-md flex-col gap-6 lg:max-w-lg">
+    <div className="flex w-full max-w-md flex-col gap-6 break-words lg:max-w-lg">
       <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
         Lyrics
       </p>
       <div className="space-y-3">
         {previous ? (
-          <p className="text-base text-[var(--color-text-secondary)] opacity-30">{previous}</p>
+          <p className="text-base leading-relaxed text-[var(--color-text-secondary)] opacity-30 break-words">
+            {previous}
+          </p>
         ) : null}
         <p
           className={cn(
-            "text-2xl font-medium leading-snug text-[var(--color-text-primary)]",
-            !isPlaying && currentIndex >= 0 && "italic opacity-80",
+            "text-2xl font-medium leading-snug break-words",
+            statusToText(isPlaying, currentIndex >= 0),
           )}
         >
           {current}
         </p>
         {next ? (
-          <p className="text-base text-[var(--color-text-secondary)] opacity-40">{next}</p>
+          <p className="text-base leading-relaxed text-[var(--color-text-secondary)] opacity-40 break-words">
+            {next}
+          </p>
         ) : null}
       </div>
     </div>
   );
+}
+
+function statusToText(isPlaying: boolean, hasCurrent: boolean): string {
+  if (!hasCurrent) {
+    return "text-[var(--color-text-primary)]";
+  }
+  return isPlaying
+    ? "text-[var(--color-text-primary)]"
+    : "italic opacity-90 text-[var(--color-text-primary)]";
 }
 
 function placeholderLines(title: string): string[] {

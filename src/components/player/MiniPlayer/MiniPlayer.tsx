@@ -1,13 +1,4 @@
-import {
-  ListMusic,
-  Maximize2,
-  Pause,
-  Play,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { ListMusic, Maximize2, Volume2, VolumeX } from "lucide-react";
 import type { Track } from "@/domain/entities";
 import { Artwork } from "@/components/music/Artwork";
 import { IconButton } from "@/components/common/IconButton";
@@ -15,6 +6,7 @@ import { PlayerControls } from "@/components/player/PlayerControls";
 import { ProgressBar } from "@/components/player/ProgressBar";
 import { Slider } from "@/components/common/Slider";
 import { usePlayback } from "@/hooks/usePlayback";
+import { useMuteMemory } from "@/hooks/useMuteMemory";
 import { usePlayerStore } from "@/stores/player.store";
 import { useQueueStore } from "@/stores/queue.store";
 import { cn } from "@/utils/cn";
@@ -39,8 +31,9 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
   const queueLength = useQueueStore((state) => state.tracks.length);
 
   const playback = usePlayback();
-  const hasTrack = currentTrack !== null;
+  const mute = useMuteMemory();
 
+  const hasTrack = currentTrack !== null;
   const isPlaying = status === "playing";
 
   return (
@@ -49,7 +42,7 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
       data-state={status}
     >
       <div className="flex items-center gap-5">
-        <NowPlaying track={currentTrack} />
+        <NowPlaying track={currentTrack} status={status} isPlaying={isPlaying} />
         <PlayerControls
           isPlaying={isPlaying}
           disabled={!hasTrack}
@@ -66,6 +59,9 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
         <div className="ml-auto flex items-center gap-2">
           <VolumeInline
             volume={volume}
+            onToggleMute={() => {
+              void mute.toggle();
+            }}
             onVolumeChange={(value) => {
               void playback.setVolume(value);
             }}
@@ -94,7 +90,19 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
   );
 }
 
-function NowPlaying({ track }: { track: Track | null }) {
+interface NowPlayingProps {
+  track: Track | null;
+  status: ReturnType<typeof usePlayerStore.getState>["status"];
+  isPlaying: boolean;
+}
+
+/**
+ * Current-track styling reflects the playback status. Only `playing`
+ * uses the chromatic accent; `loading` keeps the accent but adds the
+ * small spinner affordance later, `paused` falls back to primary text,
+ * `error` shows a subtle danger hint, and `idle` shows neutral text.
+ */
+function NowPlaying({ track, status, isPlaying }: NowPlayingProps) {
   if (!track) {
     return (
       <div className="flex min-w-0 items-center gap-3">
@@ -110,6 +118,16 @@ function NowPlaying({ track }: { track: Track | null }) {
       </div>
     );
   }
+  const titleClass = cn(
+    "truncate text-sm",
+    status === "error"
+      ? "text-[var(--color-danger)]"
+      : status === "loading"
+        ? "text-[var(--color-album-accent)] opacity-80"
+        : isPlaying
+          ? "text-[var(--color-album-accent)]"
+          : "text-[var(--color-text-primary)]",
+  );
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Artwork
@@ -120,7 +138,7 @@ function NowPlaying({ track }: { track: Track | null }) {
         rounded="md"
       />
       <div className="flex min-w-0 flex-col leading-tight">
-        <span className={cn("truncate text-sm", isPlayingColor())}>{track.title}</span>
+        <span className={titleClass}>{track.title}</span>
         <span className="truncate text-xs text-[var(--color-text-secondary)]">
           {track.artist.name}
         </span>
@@ -129,28 +147,17 @@ function NowPlaying({ track }: { track: Track | null }) {
   );
 }
 
-function isPlayingColor() {
-  return "text-[var(--color-album-accent)]";
+interface VolumeInlineProps {
+  volume: number;
+  onToggleMute: () => void;
+  onVolumeChange: (value: number) => void;
 }
 
-function VolumeInline({
-  volume,
-  onVolumeChange,
-}: {
-  volume: number;
-  onVolumeChange: (value: number) => void;
-}) {
+function VolumeInline({ volume, onToggleMute, onVolumeChange }: VolumeInlineProps) {
   const muted = volume === 0;
   return (
     <div className="hidden items-center gap-2 md:flex">
-      <IconButton
-        label={muted ? "Unmute" : "Mute"}
-        size="sm"
-        tone="subtle"
-        onClick={() => {
-          onVolumeChange(muted ? 0.8 : 0);
-        }}
-      >
+      <IconButton label={muted ? "Unmute" : "Mute"} size="sm" tone="subtle" onClick={onToggleMute}>
         {muted ? (
           <VolumeX size={16} aria-hidden="true" />
         ) : (
@@ -170,9 +177,3 @@ function VolumeInline({
     </div>
   );
 }
-
-// Re-export the unused icons we still want available through the file.
-void Pause;
-void Play;
-void SkipBack;
-void SkipForward;

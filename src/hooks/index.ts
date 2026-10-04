@@ -1,4 +1,9 @@
 export { useAsyncResource } from "./useAsyncResource";
 export type { AsyncResource, AsyncStatus } from "./useAsyncResource";
+export { useMotionPreference } from "./useMotionPreference";
+export type { MotionPreference } from "./useMotionPreference";
+export { useMuteMemory } from "./useMuteMemory";
+export type { MuteController } from "./useMuteMemory";
 export { usePlayback } from "./usePlayback";
 export type { PlaybackController } from "./usePlayback";
+export { usePlayerShortcuts } from "./usePlayerShortcuts";

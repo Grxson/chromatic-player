@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from "react";
+import { Play } from "lucide-react";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { AlbumCard } from "@/components/music/AlbumCard";
@@ -18,6 +19,7 @@ interface HomeData {
   albums: Album[];
   artists: Artist[];
   playlists: Playlist[];
+  albumTracks: Record<string, Track[]>;
   moreAlbums: Album[];
   moreTracks: Track[];
 }
@@ -27,6 +29,7 @@ const PLACEHOLDER: HomeData = {
   albums: [],
   artists: [],
   playlists: [],
+  albumTracks: {},
   moreAlbums: [],
   moreTracks: [],
 };
@@ -36,7 +39,6 @@ export function HomePage() {
   const playback = usePlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
-  void playback;
 
   const loader = useCallback(async (): Promise<HomeData> => {
     const all = await provider.search("", 50);
@@ -44,11 +46,27 @@ export function HomePage() {
     const albums = all.albums ?? [];
     const artists = all.artists ?? [];
     const playlists = all.playlists ?? [];
+
+    // Pre-resolve album tracks so the Hero "Play" button can dispatch a
+    // real contextual queue instead of a single-track play.
+    const albumIds = albums.slice(0, 1).map((a) => a.id);
+    const tracksByAlbum = await Promise.all(
+      albumIds.map(async (id) => {
+        const t = await provider.getAlbumTracks(id);
+        return [id, t] as const;
+      }),
+    );
+    const albumTracks: Record<string, Track[]> = {};
+    for (const [id, t] of tracksByAlbum) {
+      albumTracks[id] = t;
+    }
+
     return {
       recent: tracks.slice(0, 6),
       albums: albums.slice(0, 6),
       artists: artists.slice(0, 6),
       playlists: playlists.slice(0, 5),
+      albumTracks,
       moreAlbums: albums.slice(0, 10),
       moreTracks: tracks.slice(0, 10),
     };
@@ -59,7 +77,18 @@ export function HomePage() {
   const loading = status === "loading" || status === "idle";
 
   const heroAlbum = view.albums[0];
+  const heroAlbumTracks = useMemo(
+    () => (heroAlbum ? (view.albumTracks[heroAlbum.id] ?? []) : []),
+    [heroAlbum, view.albumTracks],
+  );
   const heroTracks = useMemo(() => view.recent.slice(0, 5), [view.recent]);
+
+  const handleHeroPlay = useCallback(() => {
+    if (heroAlbumTracks.length === 0 || !heroAlbum) {
+      return;
+    }
+    void playback.playQueue(heroAlbumTracks, 0);
+  }, [heroAlbumTracks, heroAlbum, playback]);
 
   return (
     <>
@@ -70,7 +99,9 @@ export function HomePage() {
       />
       <Content>
         <div className="space-y-12">
-          {heroAlbum ? <Hero album={heroAlbum} /> : null}
+          {heroAlbum ? (
+            <Hero album={heroAlbum} onPlay={handleHeroPlay} canPlay={heroAlbumTracks.length > 0} />
+          ) : null}
 
           <Section
             title="Recently played"
@@ -184,7 +215,13 @@ export function HomePage() {
   );
 }
 
-function Hero({ album }: { album: Album }) {
+interface HeroProps {
+  album: Album;
+  onPlay: () => void;
+  canPlay: boolean;
+}
+
+function Hero({ album, onPlay, canPlay }: HeroProps) {
   const { navigate } = useRouter();
   return (
     <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-8 py-7">
@@ -225,19 +262,19 @@ function Hero({ album }: { album: Album }) {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => {
-                navigate({ type: "album", id: album.id });
-              }}
-              className="rounded-md bg-[var(--color-surface-2)] px-4 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-elevated)]"
+              onClick={onPlay}
+              disabled={!canPlay}
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--color-album-accent)] px-5 py-2 text-sm font-medium text-[var(--color-canvas)] hover:brightness-110 disabled:opacity-50"
             >
-              Open album
+              <Play size={16} aria-hidden="true" className="translate-x-[1px]" />
+              Play
             </button>
             <button
               type="button"
               onClick={() => {
                 navigate({ type: "album", id: album.id });
               }}
-              className="rounded-md bg-[var(--color-album-accent)]/90 px-4 py-2 text-xs font-medium text-[var(--color-canvas)] hover:bg-[var(--color-album-accent)]"
+              className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-transparent px-5 py-2 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]"
             >
               Open album
             </button>

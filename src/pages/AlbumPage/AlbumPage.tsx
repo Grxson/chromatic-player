@@ -8,7 +8,7 @@ import { TrackRow } from "@/components/music/TrackRow";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Spinner } from "@/components/common/Spinner";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
 import { usePlayerStore } from "@/stores/player.store";
 import { formatDuration } from "@/utils/time";
@@ -23,7 +23,7 @@ interface AlbumData {
 }
 
 export function AlbumPage({ albumId }: AlbumPageProps) {
-  const provider = useMusicProvider();
+  const provider = useCatalogProvider();
   const playback = usePlayback();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const status = usePlayerStore((state) => state.status);
@@ -162,7 +162,7 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
 }
 
 async function loadAlbum(
-  provider: ReturnType<typeof useMusicProvider>,
+  provider: ReturnType<typeof useCatalogProvider>,
   albumId: string,
 ): Promise<AlbumData> {
   const [album, tracks] = await Promise.all([

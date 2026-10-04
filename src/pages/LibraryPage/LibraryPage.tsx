@@ -9,7 +9,7 @@ import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/common/Skeleton";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
 import { useRouter } from "@/app/router/useRouter";
 import { useLibraryStore } from "@/stores/library.store";
@@ -41,7 +41,7 @@ const PLACEHOLDER: LibraryData = {
 };
 
 export function LibraryPage() {
-  const provider = useMusicProvider();
+  const provider = useCatalogProvider();
   const playback = usePlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
@@ -200,7 +200,11 @@ export function LibraryPage() {
             ) : (
               <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
                 {playlists.map((playlist) => (
-                  <PlaylistCard key={playlist.id} playlist={playlist} />
+                  <PlaylistCard
+                    key={playlist.id}
+                    playlist={playlist}
+                    onOpen={(item) => navigate({ type: "playlist", id: item.id })}
+                  />
                 ))}
               </div>
             )
@@ -221,7 +225,7 @@ function SkeletonList() {
   );
 }
 
-async function loadLibrary(provider: ReturnType<typeof useMusicProvider>): Promise<LibraryData> {
+async function loadLibrary(provider: ReturnType<typeof useCatalogProvider>): Promise<LibraryData> {
   const all = await provider.search("", 50);
   return {
     tracks: all.tracks ?? [],

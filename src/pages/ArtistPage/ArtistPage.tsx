@@ -9,7 +9,7 @@ import { TrackRow } from "@/components/music/TrackRow";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Spinner } from "@/components/common/Spinner";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
 import { useRouter } from "@/app/router/useRouter";
 import { usePlayerStore } from "@/stores/player.store";
@@ -25,7 +25,7 @@ interface ArtistData {
 }
 
 export function ArtistPage({ artistId }: ArtistPageProps) {
-  const provider = useMusicProvider();
+  const provider = useCatalogProvider();
   const playback = usePlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
@@ -63,7 +63,7 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
   }
 
   const { artist, albums, tracks } = data;
-  const isCurrentArtist = tracks.some((t) => t.id === currentTrack?.id);
+  const isCurrentArtist = currentTrack?.artist.id === artist.id;
   const isPlaying = isCurrentArtist && status === "playing";
 
   const handlePlayAll = () => {
@@ -173,16 +173,14 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
 }
 
 async function loadArtist(
-  provider: ReturnType<typeof useMusicProvider>,
+  provider: ReturnType<typeof useCatalogProvider>,
   artistId: string,
 ): Promise<ArtistData> {
   const [artist, albums] = await Promise.all([
     provider.getArtist(artistId),
     provider.getArtistAlbums(artistId),
   ]);
-  // Flatten the album tracks to give the artist page a "popular tracks"
-  // surface that is meaningful even when the provider doesn't expose one.
-  const trackLists = await Promise.all(albums.map((a) => provider.getAlbumTracks(a.id)));
-  const tracks = trackLists.flat().slice(0, 12);
-  return { artist, albums, tracks };
+  // The public catalog contract does not currently guarantee an artist
+  // popular-tracks relationship, so avoid fanning out into one request per album.
+  return { artist, albums, tracks: [] };
 }

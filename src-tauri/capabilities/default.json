@@ -1,9 +1,15 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window. Kept intentionally minimal during the foundation phase.",
+  "description": "Main window permissions for OAuth deep-link callbacks and opening TIDAL login in the system browser.",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:event:default",
+    "deep-link:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://login.tidal.com/**" }]
+    }
   ]
 }

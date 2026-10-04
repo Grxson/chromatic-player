@@ -8,7 +8,8 @@ import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { TrackRow } from "@/components/music/TrackRow";
 import { Skeleton } from "@/components/common/Skeleton";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useCatalogProvider } from "@/app/providers/useMusicProvider";
+import { useAuthStore } from "@/stores/auth.store";
 import { usePlayback } from "@/hooks/usePlayback";
 import { useRouter } from "@/app/router/useRouter";
 import { usePlayerStore } from "@/stores/player.store";
@@ -35,10 +36,11 @@ const PLACEHOLDER: HomeData = {
 };
 
 export function HomePage() {
-  const provider = useMusicProvider();
+  const provider = useCatalogProvider();
   const playback = usePlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const authStatus = useAuthStore((state) => state.status);
 
   const loader = useCallback(async (): Promise<HomeData> => {
     const all = await provider.search("", 50);
@@ -93,11 +95,43 @@ export function HomePage() {
   return (
     <>
       <Header
-        eyebrow="Welcome back"
-        title="Good evening"
-        subtitle="A quiet session of the catalogue."
+        eyebrow={provider.name === "tidal-catalog" ? "TIDAL catalogue" : "Welcome back"}
+        title={provider.name === "tidal-catalog" ? "Connected to TIDAL" : "Good evening"}
+        subtitle={
+          provider.name === "tidal-catalog"
+            ? "Browse the official catalogue. Playback remains a local mock in this alpha."
+            : "A quiet session of the catalogue."
+        }
       />
       <Content>
+        {provider.name === "tidal-catalog" ? (
+          <section className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+            <div>
+              <h2 className="text-base font-medium text-[var(--color-text-primary)]">
+                {authStatus === "authenticated"
+                  ? "Search the TIDAL catalogue"
+                  : "Connect your TIDAL account"}
+              </h2>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                {authStatus === "authenticated"
+                  ? "Search for artists, albums, tracks and playlists."
+                  : "Open Settings to configure and connect TIDAL."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                navigate({
+                  type: "view",
+                  view: authStatus === "authenticated" ? "search" : "settings",
+                })
+              }
+              className="rounded-md bg-[var(--color-album-accent)] px-4 py-2 text-sm font-medium text-[var(--color-canvas)]"
+            >
+              {authStatus === "authenticated" ? "Search" : "Open Settings"}
+            </button>
+          </section>
+        ) : null}
         <div className="space-y-12">
           {heroAlbum ? (
             <Hero album={heroAlbum} onPlay={handleHeroPlay} canPlay={heroAlbumTracks.length > 0} />
@@ -167,7 +201,11 @@ export function HomePage() {
           >
             <Grid>
               {view.playlists.map((playlist) => (
-                <PlaylistCard key={playlist.id} playlist={playlist} />
+                <PlaylistCard
+                  key={playlist.id}
+                  playlist={playlist}
+                  onOpen={(item) => navigate({ type: "playlist", id: item.id })}
+                />
               ))}
             </Grid>
           </Section>

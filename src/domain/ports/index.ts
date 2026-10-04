@@ -1,1 +1,8 @@
-export type { AuthState, MusicProvider, SearchResult } from "./MusicProvider";
+export type {
+  AuthState,
+  MusicAuthProvider,
+  MusicCatalogProvider,
+  MusicProvider,
+  PlaybackBackend,
+  SearchResult,
+} from "./MusicProvider";

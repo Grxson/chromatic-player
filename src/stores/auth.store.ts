@@ -1,24 +1,15 @@
 import { create } from "zustand";
-import type { User } from "@/domain/entities";
+import type { AuthState } from "@/domain/ports";
 
-export interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  setUser: (user: User | null) => void;
-  setLoading: (loading: boolean) => void;
-  signOut: () => void;
+interface AuthStore extends AuthState {
+  setState: (state: AuthState) => void;
+  reset: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  isAuthenticated: false,
-  isLoading: false,
-  setUser: (user) =>
-    set({
-      user,
-      isAuthenticated: user !== null,
-    }),
-  setLoading: (isLoading) => set({ isLoading }),
-  signOut: () => set({ user: null, isAuthenticated: false }),
+const initial: AuthState = { status: "initializing" };
+
+export const useAuthStore = create<AuthStore>((set) => ({
+  ...initial,
+  setState: (state) => set(state),
+  reset: () => set(initial),
 }));

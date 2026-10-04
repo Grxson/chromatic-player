@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import type { ViewKey } from "@/components/layout/Sidebar";
 import { AlbumPage } from "@/pages/AlbumPage";
 import { ArtistPage } from "@/pages/ArtistPage";
+import { PlaylistPage } from "@/pages/PlaylistPage";
 import { FullscreenPlayerPage } from "@/pages/FullscreenPlayerPage";
 import { HomePage } from "@/pages/HomePage";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -58,6 +59,8 @@ export function App() {
       <AlbumPage albumId={route.id} />
     ) : route.type === "artist" ? (
       <ArtistPage artistId={route.id} />
+    ) : route.type === "playlist" ? (
+      <PlaylistPage playlistId={route.id} />
     ) : (
       <FullscreenPlayerPage onMinimize={exitFullscreen} />
     );

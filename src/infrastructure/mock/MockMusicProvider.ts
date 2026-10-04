@@ -1,5 +1,5 @@
 import type { Album, Artist, Playlist, Track } from "@/domain/entities";
-import type { AuthState, MusicProvider, SearchResult } from "@/domain/ports";
+import type { MusicProvider, SearchResult } from "@/domain/ports";
 import { mockAlbums, mockArtists, mockPlaylists, mockTracks } from "@/mocks";
 
 /**
@@ -19,8 +19,8 @@ interface MockPlaybackSnapshot {
 }
 
 /**
- * In-memory music provider used during the foundation phase. It implements
- * the full MusicProvider contract against a tiny static dataset so the UI
+ * In-memory catalogue and playback backend used for offline development.
+ * It implements the composable mock provider contracts against the dataset so the UI
  * and stores can be exercised end-to-end without any backend.
  *
  * It does not produce audio. Playback calls only mutate the provider's
@@ -33,16 +33,10 @@ interface MockPlaybackSnapshot {
 export class MockMusicProvider implements MusicProvider {
   readonly name = "mock";
 
-  #auth: AuthState = { isAuthenticated: true };
-
   #nowPlaying: Track | null = null;
   #isPlaying = false;
   #position = 0;
   #volume = 0.8;
-
-  get auth(): AuthState {
-    return this.#auth;
-  }
 
   /** Snapshot of the mock playback state. Useful for diagnostics. */
   snapshot(): MockPlaybackSnapshot {
@@ -51,19 +45,6 @@ export class MockMusicProvider implements MusicProvider {
       position: this.#position,
       volume: this.#volume,
     };
-  }
-
-  async authenticate(): Promise<void> {
-    await this.#wait();
-    this.#auth = { isAuthenticated: true, userId: "mock-user" };
-  }
-
-  async signOut(): Promise<void> {
-    await this.#wait();
-    this.#auth = { isAuthenticated: false };
-    this.#nowPlaying = null;
-    this.#isPlaying = false;
-    this.#position = 0;
   }
 
   async search(query: string, limit = 10): Promise<SearchResult> {

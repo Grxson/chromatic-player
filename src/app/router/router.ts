@@ -4,6 +4,7 @@ export type Route =
   | { type: "view"; view: ViewKey }
   | { type: "album"; id: string }
   | { type: "artist"; id: string }
+  | { type: "playlist"; id: string }
   | { type: "fullscreen" };
 
 export const HOME_ROUTE: Route = { type: "view", view: "home" };

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Track } from "@/domain/entities";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { usePlaybackBackend } from "@/app/providers/useMusicProvider";
 import { usePlayerStore } from "@/stores/player.store";
 import { useQueueStore } from "@/stores/queue.store";
 
@@ -80,11 +80,20 @@ function prepareForTrack(track: Track): void {
  * Captures the relevant player state so callers can restore the
  * pre-transition snapshot if a downstream provider call fails.
  */
+function beginTransitionOperation(): number {
+  return usePlayerStore.getState().beginTransitionOperation();
+}
+
+function isCurrentTransitionOperation(operationId: number): boolean {
+  return usePlayerStore.getState().isCurrentTransitionOperation(operationId);
+}
+
 function snapshotPlayer(): {
   track: ReturnType<typeof usePlayerStore.getState>["currentTrack"];
   status: ReturnType<typeof usePlayerStore.getState>["status"];
   position: ReturnType<typeof usePlayerStore.getState>["position"];
   duration: ReturnType<typeof usePlayerStore.getState>["duration"];
+  volume: ReturnType<typeof usePlayerStore.getState>["volume"];
   error: ReturnType<typeof usePlayerStore.getState>["error"];
 } {
   const s = usePlayerStore.getState();
@@ -93,17 +102,15 @@ function snapshotPlayer(): {
     status: s.status,
     position: s.position,
     duration: s.duration,
+    volume: s.volume,
     error: s.error,
   };
 }
 
-function restorePlayer(snapshot: ReturnType<typeof snapshotPlayer>): void {
-  const s = usePlayerStore.getState();
-  s.setCurrentTrack(snapshot.track);
-  s.setPosition(snapshot.position);
-  s.setDuration(snapshot.duration);
-  s.setStatus(snapshot.status);
-  s.setError(snapshot.error);
+function restoreTransport(snapshot: ReturnType<typeof snapshotPlayer>): void {
+  const store = usePlayerStore.getState();
+  store.setStatus(snapshot.status);
+  store.setError(snapshot.error);
 }
 
 /**
@@ -113,22 +120,26 @@ function restorePlayer(snapshot: ReturnType<typeof snapshotPlayer>): void {
 async function dispatchTrack(
   track: Track,
   deps: {
-    provider: ReturnType<typeof useMusicProvider>;
+    provider: ReturnType<typeof usePlaybackBackend>;
   },
 ): Promise<"ok" | "failed"> {
+  const player = usePlayerStore.getState();
+  const operationId = player.beginTransitionOperation();
   prepareForTrack(track);
   try {
     await deps.provider.play(track);
-    usePlayerStore.getState().setStatus("playing");
+    if (player.isCurrentTransitionOperation(operationId)) {
+      usePlayerStore.getState().setStatus("playing");
+    }
     return "ok";
   } catch (err) {
-    // The requested track stays visible in the UI but `status` flips
-    // to `error` so the user is not lied to about playback. The Queue
-    // mutation already happened, so the cursor remains consistent with
-    // what the queue actually contains.
-    const message = err instanceof Error ? err.message : "Playback failed";
-    usePlayerStore.getState().setError(message);
-    console.error("playback.dispatchTrack failed", err);
+    if (player.isCurrentTransitionOperation(operationId)) {
+      // Keep the requested track and queue cursor visible, but make the
+      // failed playback explicit instead of claiming it is playing.
+      const message = err instanceof Error ? err.message : "Playback failed";
+      usePlayerStore.getState().setError(message);
+      console.error("playback.dispatchTrack failed", err);
+    }
     return "failed";
   }
 }
@@ -139,25 +150,21 @@ async function dispatchTrack(
  * resets the cursor, then jumpTo moves it) keeps the queue store as
  * the single owner of the cursor.
  */
-function replaceQueueAndLoad(
+async function replaceQueueAndLoad(
   tracks: Track[],
   startIndex: number,
   enqueueQueue: (tracks: Track[]) => void,
   jumpTo: (index: number) => Track | null,
   deps: {
-    provider: ReturnType<typeof useMusicProvider>;
+    provider: ReturnType<typeof usePlaybackBackend>;
   },
-): void {
+): Promise<void> {
   enqueueQueue(tracks);
-  jumpTo(startIndex);
-  // `jumpTo` returns the resulting track; if it is null we bail
-  // out — `replaceQueueAndLoad` is only called when we already know
-  // `startIndex` is valid for `tracks`.
-  const first = tracks[startIndex];
-  if (!first) {
+  const track = jumpTo(startIndex);
+  if (!track) {
     return;
   }
-  void dispatchTrack(first, deps);
+  await dispatchTrack(track, deps);
 }
 
 /**
@@ -176,7 +183,7 @@ function replaceQueueAndLoad(
  * event bus and no DI machinery.
  */
 export function usePlayback(): PlaybackController {
-  const provider = useMusicProvider();
+  const provider = usePlaybackBackend();
   const setCurrentTrack = usePlayerStore((state) => state.setCurrentTrack);
   const setStatus = usePlayerStore((state) => state.setStatus);
   const setError = usePlayerStore((state) => state.setError);
@@ -195,7 +202,7 @@ export function usePlayback(): PlaybackController {
 
   const playTrack = useCallback(
     async (track: Track) => {
-      replaceQueueAndLoad([track], 0, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad([track], 0, enqueueQueue, jumpTo, { provider });
     },
     [enqueueQueue, jumpTo, provider],
   );
@@ -205,7 +212,7 @@ export function usePlayback(): PlaybackController {
       if (tracks.length === 0) {
         return;
       }
-      replaceQueueAndLoad(tracks, 0, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad(tracks, 0, enqueueQueue, jumpTo, { provider });
     },
     [enqueueQueue, jumpTo, provider],
   );
@@ -216,7 +223,7 @@ export function usePlayback(): PlaybackController {
         return;
       }
       const safeIndex = Math.min(Math.max(0, startIndex), tracks.length - 1);
-      replaceQueueAndLoad(tracks, safeIndex, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad(tracks, safeIndex, enqueueQueue, jumpTo, { provider });
     },
     [enqueueQueue, jumpTo, provider],
   );
@@ -244,10 +251,6 @@ export function usePlayback(): PlaybackController {
       const queue = useQueueStore.getState();
       const wasCurrent = index === queue.currentIndex;
 
-      // Snapshot only the player state. The queue store mutation is
-      // not rolled back; the removed track stays removed and the UI
-      // adapts to the new shape.
-      const snapshot = snapshotPlayer();
       removeAt(index);
 
       if (!wasCurrent) {
@@ -257,6 +260,7 @@ export function usePlayback(): PlaybackController {
         return;
       }
 
+      const operationId = beginTransitionOperation();
       const afterQueue = useQueueStore.getState();
       const nextCurrent = afterQueue.getCurrentTrack();
 
@@ -271,7 +275,7 @@ export function usePlayback(): PlaybackController {
       } catch (err) {
         console.error("removeFromQueue pause failed", err);
       }
-      void snapshot; // snapshot retained for potential future rollback paths
+      if (!isCurrentTransitionOperation(operationId)) return;
       setCurrentTrack(null);
       setPosition(0);
       setDuration(0);
@@ -282,6 +286,7 @@ export function usePlayback(): PlaybackController {
   );
 
   const clearQueue = useCallback(async () => {
+    const operationId = beginTransitionOperation();
     const snapshot = snapshotPlayer();
     clearQueueStore();
     if (snapshot.track) {
@@ -291,6 +296,7 @@ export function usePlayback(): PlaybackController {
         /* ignore — provider pause failure should not block UI cleanup */
       }
     }
+    if (!isCurrentTransitionOperation(operationId)) return;
     setCurrentTrack(null);
     setPosition(0);
     setDuration(0);
@@ -304,10 +310,12 @@ export function usePlayback(): PlaybackController {
     if (!track) {
       return;
     }
+    const operationId = beginTransitionOperation();
     const before = snapshotPlayer();
     try {
       if (status === "playing") {
         await provider.pause();
+        if (!isCurrentTransitionOperation(operationId)) return;
         setStatus("paused");
         setError(null);
       } else {
@@ -316,11 +324,13 @@ export function usePlayback(): PlaybackController {
         } else {
           await provider.resume();
         }
+        if (!isCurrentTransitionOperation(operationId)) return;
         setStatus("playing");
         setError(null);
       }
     } catch (err) {
-      restorePlayer(before);
+      if (!isCurrentTransitionOperation(operationId)) return;
+      restoreTransport(before);
       const message = err instanceof Error ? err.message : "Playback failed";
       setError(message);
       console.error("playback.togglePlay failed", err);
@@ -328,13 +338,16 @@ export function usePlayback(): PlaybackController {
   }, [getCurrentTrack, provider, setError, setStatus]);
 
   const pause = useCallback(async () => {
+    const operationId = beginTransitionOperation();
     const before = snapshotPlayer();
     try {
       await provider.pause();
+      if (!isCurrentTransitionOperation(operationId)) return;
       setStatus("paused");
       setError(null);
     } catch (err) {
-      restorePlayer(before);
+      if (!isCurrentTransitionOperation(operationId)) return;
+      restoreTransport(before);
       const message = err instanceof Error ? err.message : "Playback failed";
       setError(message);
       console.error("playback.pause failed", err);
@@ -342,6 +355,7 @@ export function usePlayback(): PlaybackController {
   }, [provider, setError, setStatus]);
 
   const resume = useCallback(async () => {
+    const operationId = beginTransitionOperation();
     const before = snapshotPlayer();
     const current = usePlayerStore.getState().currentTrack ?? getCurrentTrack();
     if (!current) {
@@ -349,10 +363,12 @@ export function usePlayback(): PlaybackController {
     }
     try {
       await provider.resume();
+      if (!isCurrentTransitionOperation(operationId)) return;
       setStatus("playing");
       setError(null);
     } catch (err) {
-      restorePlayer(before);
+      if (!isCurrentTransitionOperation(operationId)) return;
+      restoreTransport(before);
       const message = err instanceof Error ? err.message : "Playback failed";
       setError(message);
       console.error("playback.resume failed", err);
@@ -360,7 +376,7 @@ export function usePlayback(): PlaybackController {
   }, [getCurrentTrack, provider, setError, setStatus]);
 
   const next = useCallback(async () => {
-    const before = snapshotPlayer();
+    const operationId = beginTransitionOperation();
     const track = moveNext();
     if (!track) {
       // End of queue: pause the provider and keep the current track
@@ -368,28 +384,43 @@ export function usePlayback(): PlaybackController {
       try {
         await provider.pause();
       } catch (err) {
-        console.error("playback.next pause failed", err);
+        if (isCurrentTransitionOperation(operationId)) {
+          console.error("playback.next pause failed", err);
+        }
       }
+      if (!isCurrentTransitionOperation(operationId)) return;
       setStatus("paused");
       setError(null);
       return;
     }
     await dispatchTrack(track, { provider });
-    // dispatchTrack already handles success/failure for the provider call.
-    void before;
   }, [moveNext, provider, setError, setStatus]);
 
   const previous = useCallback(async () => {
     const track = movePrevious();
     if (!track) {
       // At the start of the queue: rewind current position to 0.
-      const before = snapshotPlayer();
+      const positionOperationId = usePlayerStore.getState().beginPositionOperation();
+      const transitionId = usePlayerStore.getState().transitionOperationId;
+      const before = usePlayerStore.getState().position;
       setPosition(0);
       try {
         await provider.seek(0);
+        const player = usePlayerStore.getState();
+        if (
+          !player.isCurrentPositionOperation(positionOperationId) ||
+          !player.isCurrentTransitionOperation(transitionId)
+        )
+          return;
         setError(null);
       } catch (err) {
-        restorePlayer(before);
+        const player = usePlayerStore.getState();
+        if (
+          !player.isCurrentPositionOperation(positionOperationId) ||
+          !player.isCurrentTransitionOperation(transitionId)
+        )
+          return;
+        setPosition(before);
         const message = err instanceof Error ? err.message : "Seek failed";
         setError(message);
         console.error("playback.previous seek failed", err);
@@ -404,15 +435,30 @@ export function usePlayback(): PlaybackController {
       const { duration } = usePlayerStore.getState();
       // Clamp to [0, duration] when duration is known, otherwise >= 0.
       const clamped = Math.max(0, duration > 0 ? Math.min(position, duration) : position);
-      const before = snapshotPlayer();
+      const player = usePlayerStore.getState();
+      const operationId = player.beginPositionOperation();
+      const transitionId = player.transitionOperationId;
+      const before = player.position;
       setPosition(clamped);
       try {
         await provider.seek(clamped);
+        const current = usePlayerStore.getState();
+        if (
+          !current.isCurrentPositionOperation(operationId) ||
+          !current.isCurrentTransitionOperation(transitionId)
+        )
+          return;
         setError(null);
       } catch (err) {
+        const current = usePlayerStore.getState();
+        if (
+          !current.isCurrentPositionOperation(operationId) ||
+          !current.isCurrentTransitionOperation(transitionId)
+        )
+          return;
         // For seek we restore position so the UI does not pretend
         // the seek succeeded.
-        setPosition(before.position);
+        setPosition(before);
         const message = err instanceof Error ? err.message : "Seek failed";
         setError(message);
         console.error("playback.seek failed", err);
@@ -424,11 +470,28 @@ export function usePlayback(): PlaybackController {
   const setVolume = useCallback(
     async (volume: number) => {
       const clamped = Math.min(1, Math.max(0, volume));
+      const player = usePlayerStore.getState();
+      const operationId = player.beginVolumeOperation();
+      const transitionId = player.transitionOperationId;
+      const before = player.volume;
       setVolumeState(clamped);
       try {
         await provider.setVolume(clamped);
+        const current = usePlayerStore.getState();
+        if (
+          !current.isCurrentVolumeOperation(operationId) ||
+          !current.isCurrentTransitionOperation(transitionId)
+        )
+          return;
         setError(null);
       } catch (err) {
+        const current = usePlayerStore.getState();
+        if (
+          !current.isCurrentVolumeOperation(operationId) ||
+          !current.isCurrentTransitionOperation(transitionId)
+        )
+          return;
+        setVolumeState(before);
         const message = err instanceof Error ? err.message : "Volume failed";
         setError(message);
         console.error("playback.setVolume failed", err);

@@ -15,6 +15,8 @@ export interface ArtworkProps {
    * ignored.
    */
   seedKey?: string;
+  /** Fills the available width while preserving a square artwork ratio. */
+  fluid?: boolean;
 }
 
 const roundedClasses: Record<NonNullable<ArtworkProps["rounded"]>, string> = {
@@ -44,8 +46,12 @@ export function Artwork({
   className = "",
   rounded = "md",
   seedKey,
+  fluid = false,
 }: ArtworkProps) {
-  const style = useMemo<CSSProperties>(() => ({ width: size, height: size }), [size]);
+  const style = useMemo<CSSProperties>(
+    () => (fluid ? { width: "100%", aspectRatio: "1 / 1" } : { width: size, height: size }),
+    [fluid, size],
+  );
 
   const classes = [
     "relative inline-flex shrink-0 items-center justify-center overflow-hidden",

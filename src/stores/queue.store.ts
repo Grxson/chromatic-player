@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Track } from "@/domain/entities";
+import type { PlaybackSource, Track } from "@/domain/entities";
 
 /**
  * QueueStore owns the playback queue. It is the single source of truth for
@@ -10,9 +10,11 @@ import type { Track } from "@/domain/entities";
 export interface QueueState {
   tracks: Track[];
   currentIndex: number;
+  source: PlaybackSource | null;
 
   /** Replaces the queue with the given tracks. Starts at the first one. */
   enqueue: (tracks: Track[]) => void;
+  setSource: (source: PlaybackSource | null) => void;
 
   /** Appends a single track to the end of the queue. */
   append: (track: Track) => void;
@@ -47,12 +49,16 @@ const EMPTY_TRACK: Track | null = null;
 export const useQueueStore = create<QueueState>((set, get) => ({
   tracks: [],
   currentIndex: -1,
+  source: null,
 
   enqueue: (tracks) =>
     set({
       tracks,
       currentIndex: tracks.length > 0 ? 0 : -1,
+      source: null,
     }),
+
+  setSource: (source) => set({ source }),
 
   append: (track) =>
     set((state) => ({
@@ -71,7 +77,7 @@ export const useQueueStore = create<QueueState>((set, get) => ({
       return { tracks, currentIndex };
     }),
 
-  clear: () => set({ tracks: [], currentIndex: -1 }),
+  clear: () => set({ tracks: [], currentIndex: -1, source: null }),
 
   moveNext: () => {
     const state = get();

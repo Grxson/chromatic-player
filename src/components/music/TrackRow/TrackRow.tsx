@@ -1,5 +1,5 @@
 import { Heart, Pause, Play } from "lucide-react";
-import type { Track } from "@/domain/entities";
+import type { Artist, Track } from "@/domain/entities";
 import { useLibraryStore } from "@/stores";
 import { Artwork } from "@/components/music/Artwork";
 import { IconButton } from "@/components/common/IconButton";
@@ -12,6 +12,7 @@ export interface TrackRowProps {
   onPlay?: (track: Track) => void;
   isCurrent?: boolean;
   isPlaying?: boolean;
+  onOpenArtist?: (artist: Artist) => void;
 }
 
 /**
@@ -25,6 +26,7 @@ export function TrackRow({
   onPlay,
   isCurrent = false,
   isPlaying = false,
+  onOpenArtist,
 }: TrackRowProps) {
   const liked = useLibraryStore((state) => state.likedTrackIds.includes(track.id));
   const toggleLike = useLibraryStore((state) => state.toggleLikeTrack);
@@ -42,7 +44,7 @@ export function TrackRow({
           : "hover:bg-[var(--color-surface)] focus-within:bg-[var(--color-surface)]",
       )}
     >
-      <div className="flex h-6 w-6 items-center justify-center text-xs text-[var(--color-text-muted)]">
+      <div className="relative flex h-6 w-6 items-center justify-center text-xs text-[var(--color-text-muted)]">
         {showIndex ? (
           <>
             <span className={cn("tabular-nums", isCurrent && "text-[var(--color-album-accent)]")}>
@@ -52,8 +54,8 @@ export function TrackRow({
               <button
                 type="button"
                 onClick={() => onPlay(track)}
-                aria-label={`Play ${track.title}`}
-                className="absolute hidden h-6 w-6 items-center justify-center text-[var(--color-text-primary)] group-hover:flex group-focus-within:flex"
+                aria-label={`${isCurrent && isPlaying ? "Pause" : "Play"} ${track.title}`}
+                className="absolute inline-flex h-6 w-6 items-center justify-center text-[var(--color-text-primary)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
               >
                 {isCurrent && isPlaying ? (
                   <Pause size={14} aria-hidden="true" />
@@ -83,9 +85,20 @@ export function TrackRow({
         >
           {track.title}
         </div>
-        <div className="truncate text-xs text-[var(--color-text-secondary)]">
-          {track.artist.name}
-        </div>
+        {onOpenArtist ? (
+          <button
+            type="button"
+            onClick={() => onOpenArtist(track.artist)}
+            aria-label={`Open artist ${track.artist.name}`}
+            className="block max-w-full truncate text-left text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-album-accent)]"
+          >
+            {track.artist.name}
+          </button>
+        ) : (
+          <div className="truncate text-xs text-[var(--color-text-secondary)]">
+            {track.artist.name}
+          </div>
+        )}
       </div>
 
       <div className="hidden truncate text-xs text-[var(--color-text-secondary)] md:block">

@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Spinner } from "@/components/common/Spinner";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
+import { useAlbumPlayback } from "@/hooks/useAlbumPlayback";
 import { useRouter } from "@/app/router/useRouter";
 
 type Phase = "idle" | "loading" | "results" | "empty" | "error";
@@ -48,6 +49,7 @@ function hasAnyResults(result: SearchResult | null): boolean {
 export function SearchPage() {
   const provider = useCatalogProvider();
   const playback = usePlayback();
+  const albumPlayback = useAlbumPlayback();
   const { navigate } = useRouter();
 
   const [draft, setDraft] = useState("");
@@ -148,6 +150,12 @@ export function SearchPage() {
             {searchState.phase === "loading" ? <Spinner size={16} /> : null}
           </label>
 
+          {provider.name === "tidal-catalog" ? (
+            <p className="-mt-4 text-xs text-[var(--color-text-muted)]">
+              TIDAL catalogue results are live; playback currently uses the mock backend.
+            </p>
+          ) : null}
+
           {searchState.phase === "idle" ? (
             <EmptyState
               icon={<SearchIcon size={20} aria-hidden="true" />}
@@ -178,6 +186,8 @@ export function SearchPage() {
             <Results
               result={searchState.result!}
               onOpenAlbum={(album) => navigate({ type: "album", id: album.id })}
+              onPlayAlbum={(album) => void albumPlayback.playAlbum(album)}
+              loadingAlbumId={albumPlayback.loadingAlbumId}
               onOpenArtist={(artist) => navigate({ type: "artist", id: artist.id })}
               onOpenPlaylist={(playlist) => navigate({ type: "playlist", id: playlist.id })}
               // Search results are a flat discovery list, not a coherent
@@ -188,6 +198,11 @@ export function SearchPage() {
               }}
             />
           )}
+          {albumPlayback.error ? (
+            <p role="alert" className="text-sm text-[var(--color-text-secondary)]">
+              {albumPlayback.error}
+            </p>
+          ) : null}
         </div>
       </Content>
     </>
@@ -197,12 +212,22 @@ export function SearchPage() {
 interface ResultsProps {
   result: SearchResult;
   onOpenAlbum: (album: Album) => void;
+  onPlayAlbum: (album: Album) => void;
+  loadingAlbumId: string | null;
   onOpenArtist: (artist: Artist) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
   onPlayTrack: (track: Track) => void;
 }
 
-function Results({ result, onOpenAlbum, onOpenArtist, onOpenPlaylist, onPlayTrack }: ResultsProps) {
+function Results({
+  result,
+  onOpenAlbum,
+  onPlayAlbum,
+  loadingAlbumId,
+  onOpenArtist,
+  onOpenPlaylist,
+  onPlayTrack,
+}: ResultsProps) {
   const tracks = result.tracks ?? [];
   const albums = result.albums ?? [];
   const artists = result.artists ?? [];
@@ -226,7 +251,13 @@ function Results({ result, onOpenAlbum, onOpenArtist, onOpenPlaylist, onPlayTrac
           <SectionHeading title="Albums" count={albums.length} />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {albums.map((album) => (
-              <AlbumCard key={album.id} album={album} onOpen={onOpenAlbum} />
+              <AlbumCard
+                key={album.id}
+                album={album}
+                onOpen={onOpenAlbum}
+                onPlay={onPlayAlbum}
+                isLoading={loadingAlbumId === album.id}
+              />
             ))}
           </div>
         </section>

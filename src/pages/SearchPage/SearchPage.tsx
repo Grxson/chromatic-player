@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Music2, Search as SearchIcon } from "lucide-react";
-import type { Album, Artist, Track } from "@/domain/entities";
+import type { Album, Artist, Playlist, Track } from "@/domain/entities";
 import type { SearchResult } from "@/domain/ports";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
@@ -10,7 +10,7 @@ import { TrackRow } from "@/components/music/TrackRow";
 import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Spinner } from "@/components/common/Spinner";
-import { useMusicProvider } from "@/app/providers/useMusicProvider";
+import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
 import { useRouter } from "@/app/router/useRouter";
 
@@ -46,7 +46,7 @@ function hasAnyResults(result: SearchResult | null): boolean {
 }
 
 export function SearchPage() {
-  const provider = useMusicProvider();
+  const provider = useCatalogProvider();
   const playback = usePlayback();
   const { navigate } = useRouter();
 
@@ -122,7 +122,11 @@ export function SearchPage() {
     <>
       <Header
         title="Search"
-        subtitle="Find tracks, albums, artists and playlists in the mock catalogue."
+        subtitle={
+          provider.name === "tidal-catalog"
+            ? "Find tracks, albums, artists and playlists in TIDAL."
+            : "Find tracks, albums, artists and playlists in the mock catalogue."
+        }
       />
       <Content>
         <div className="mx-auto flex max-w-3xl flex-col gap-8">
@@ -148,7 +152,11 @@ export function SearchPage() {
             <EmptyState
               icon={<SearchIcon size={20} aria-hidden="true" />}
               title="Search the catalogue"
-              description="Type a track, album or artist name to see results from the mock data."
+              description={
+                provider.name === "tidal-catalog"
+                  ? "Type a track, album or artist name to search TIDAL."
+                  : "Type a track, album or artist name to see results from the mock data."
+              }
             />
           ) : searchState.phase === "loading" ? (
             <div className="flex justify-center py-12">
@@ -171,6 +179,7 @@ export function SearchPage() {
               result={searchState.result!}
               onOpenAlbum={(album) => navigate({ type: "album", id: album.id })}
               onOpenArtist={(artist) => navigate({ type: "artist", id: artist.id })}
+              onOpenPlaylist={(playlist) => navigate({ type: "playlist", id: playlist.id })}
               // Search results are a flat discovery list, not a coherent
               // queue. Playback treats them as isolated tracks so we
               // don't fabricate context that wasn't there.
@@ -189,10 +198,11 @@ interface ResultsProps {
   result: SearchResult;
   onOpenAlbum: (album: Album) => void;
   onOpenArtist: (artist: Artist) => void;
+  onOpenPlaylist: (playlist: Playlist) => void;
   onPlayTrack: (track: Track) => void;
 }
 
-function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProps) {
+function Results({ result, onOpenAlbum, onOpenArtist, onOpenPlaylist, onPlayTrack }: ResultsProps) {
   const tracks = result.tracks ?? [];
   const albums = result.albums ?? [];
   const artists = result.artists ?? [];
@@ -238,7 +248,7 @@ function Results({ result, onOpenAlbum, onOpenArtist, onPlayTrack }: ResultsProp
           <SectionHeading title="Playlists" count={playlists.length} />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {playlists.map((playlist) => (
-              <PlaylistCard key={playlist.id} playlist={playlist} />
+              <PlaylistCard key={playlist.id} playlist={playlist} onOpen={onOpenPlaylist} />
             ))}
           </div>
         </section>

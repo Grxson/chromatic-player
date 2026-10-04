@@ -17,12 +17,39 @@ for import aliases. Vite 8 reads the same paths via
 `resolve.tsconfigPaths: true` (`vite.config.ts`), so we do not need any
 extra plugin.
 
-## `MusicProvider` is the only seam
+## Separate catalogue, authentication and playback ports
 
-There is exactly one port (`MusicProvider`) that crosses from the
-application to any backend. We do not introduce additional ports
-(`TrackRepository`, `AlbumRepository`, …) until there is a concrete
-second implementation that benefits from them.
+The v0.1.0-alpha.1 TIDAL integration separates `MusicCatalogProvider`,
+`MusicAuthProvider` and `PlaybackBackend`. Real catalogue and auth have
+different lifecycles from playback, which intentionally remains mock in
+alpha.1. This split is justified by the first real integration; it is not
+a general repository abstraction. `MockMusicProvider` remains a compact
+adapter implementing the compatible contracts for tests and offline mode.
+
+## TIDAL authentication uses the official Auth SDK
+
+The TIDAL adapter uses the official `@tidal-music/auth` SDK and delegates
+Authorization Code + PKCE, credential refresh and session storage to it.
+Chromatic does not embed a client secret or expose access/refresh tokens to
+Zustand/UI. The registered HTTPS redirect currently needs an external bridge
+to the app deep link; because that bridge and portal acceptance are not
+verified, authentication is not release-ready. The SDK's encrypted browser
+storage is used for this milestone; Stronghold is deferred rather than
+introducing a hardcoded vault password. See [TIDAL auth notes](../tidal/auth.md).
+
+## Catalogue uses the public TIDAL Developer Platform only
+
+The read-only catalogue is built on the official `@tidal-music/api` client
+(OpenAPI v2) and maps TIDAL resources into Chromatic domain entities. No
+legacy `/v1`, private endpoints or reconstructed artwork URLs are used. The
+adapter has no collection-write methods. See [catalogue notes](../tidal/catalog.md).
+
+## TIDAL playback is intentionally deferred
+
+`v0.1.0-alpha.1` composes real TIDAL auth/catalogue with `MockPlaybackBackend`.
+The official Player SDK is only researched in the compatibility report; real
+playback must wait for an isolated compatibility spike on supported Tauri
+WebViews and official event-reporting requirements.
 
 ## `MusicProvider` does not own queue navigation
 
@@ -62,10 +89,12 @@ source collection.
 ### Async status lifecycle
 
 Playback transitions go through `loading` before resolving to
-`playing`, `paused` or `error`. On error the previous player snapshot
-is restored: the requested track stays visible in the UI, the status
-flips to `error` and a short message lands in `PlayerStore.error`. The
-queue mutation is not rolled back.
+`playing`, `paused` or `error`. On a track-start failure the requested track remains visible and the
+queue cursor remains synchronized with it; status becomes `error` with a
+short message in `PlayerStore.error`. For pause/resume/seek/volume failures,
+the relevant prior observable state is restored where applicable. Operation
+generations shared through `PlayerStore` prevent older provider responses
+from overwriting newer player actions.
 
 ### Removing the current track
 

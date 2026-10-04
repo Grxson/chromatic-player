@@ -2,16 +2,12 @@
 
 A lightweight chromatic desktop music player powered by **TIDAL**.
 
-> **Current release: v0.0.4 — Visual QA & Interaction Hardening.**
-> This release is a hardening pass on top of v0.0.3: queue cursor and
-> current-track removal are now consistent, playback failure paths
-> restore the previous state, the Fullscreen browser returns to the
-> previous page, the Search stale-result guard is exercised against the
-> real page, mute remembers the previous volume, motion respects
-> `prefers-reduced-motion` and `settings.animations`, and the desktop
-> keyboard shortcuts are wired through a single hook. It does **not**
-> connect to TIDAL, does **not** play audio, and still ships a mock
-> data layer.
+> **Current stable release: v0.0.4 — Visual QA & Interaction Hardening.**
+> Work toward **v0.1.0-alpha.1 — TIDAL Integration Foundation** is in
+> progress. The alpha adds official TIDAL authentication and read-only
+> catalogue access while playback remains mock. It is not release-verified:
+> the HTTPS OAuth callback bridge and live TIDAL smoke tests are still
+> outstanding. No real audio playback is included.
 
 ---
 
@@ -25,8 +21,9 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 | Icons             | ✅ Lucide React                                                       |
 | Motion            | ✅ Motion (respects `prefers-reduced-motion` + `settings.animations`) |
 | Architecture      | ✅ Presentation → Application → Domain → Infrastructure               |
-| Music provider    | ⚠️ `MusicProvider` port + `MockMusicProvider` (TidalProvider pending) |
-| Playback          | ✅ `usePlayback` (contextual queue, status lifecycle, rollback)       |
+| Music catalogue   | 🚧 Official TIDAL OpenAPI v2 adapter + mock catalogue mode            |
+| Authentication    | 🚧 Official TIDAL Auth SDK integration; live callback not verified    |
+| Playback          | ✅ `usePlayback` + mock backend only; no real audio                   |
 | Chromatic Engine  | ✅ Album-reactive palette mapped to CSS custom properties             |
 | Mock navigation   | ✅ Album / Artist pages driven by `route.id` and provider             |
 | Mock search       | ✅ Provider-backed, stale-result safe, real-page tests                |
@@ -35,7 +32,7 @@ A lightweight chromatic desktop music player powered by **TIDAL**.
 | Mini Player       | ✅ Status-aware current-track styling                                 |
 | Fullscreen Player | ✅ Status-aware, chromatically reactive, mock lyrics                  |
 | Keyboard          | ✅ Space, Arrow keys, M (mute), F (fullscreen), Q (queue), Escape     |
-| TIDAL API         | 🚧 Reserved                                                           |
+| TIDAL API         | 🚧 Read-only catalogue foundation in progress                         |
 | Distribution      | 🚧 Reserved                                                           |
 
 ---
@@ -66,16 +63,15 @@ usePlayback (src/hooks/usePlayback.ts)
    ↓
 QueueStore + PlayerStore (src/stores/)
    ↓
-MusicProvider  ←  port
+MusicCatalogProvider + MusicAuthProvider + PlaybackBackend  ← ports
    ↓
-TidalProvider / MockMusicProvider  ←  adapters
+TidalAuthProvider + TidalCatalogProvider + MockPlaybackBackend
 ```
 
-`usePlayback` is the single coordination layer. Components must never
-call `MusicProvider.play` directly, never mutate the cursor via
-`useQueueStore.setState`, and never mutate `PlayerStore.currentTrack`
-on their own. They go through the hook so the three layers stay
-synchronised even when a provider call fails.
+`usePlayback` is the single playback coordination layer. The UI consumes
+provider-neutral domain entities; only the app composition root selects
+TIDAL or mock auth/catalogue adapters. Playback uses the mock backend in
+this milestone.
 
 For the full architecture overview see
 [`docs/architecture/README.md`](docs/architecture/README.md).
@@ -193,36 +189,34 @@ chromatic-player/
 
 ## Roadmap
 
-| Version | Theme                                                          |
-| ------- | -------------------------------------------------------------- |
-| v0.0.1  | Foundation                                                     |
-| v0.0.2  | Foundation Hardening                                           |
-| v0.0.3  | Visual Prototype                                               |
-| v0.0.4  | Visual QA & Interaction Hardening (current)                    |
-| v0.1.0  | Core Player (real audio, queue, library)                       |
-| v0.2.0  | Desktop Integration (media keys, MPRIS, Windows Media Session) |
-| v0.3.0  | Experience (lyrics, Chromatic palette, visual polish)          |
-| v0.4.0+ | Providers (local files, additional backends)                   |
-| v1.0.0  | Stable                                                         |
+| Version        | Theme                                                          |
+| -------------- | -------------------------------------------------------------- |
+| v0.0.1         | Foundation                                                     |
+| v0.0.2         | Foundation Hardening                                           |
+| v0.0.3         | Visual Prototype                                               |
+| v0.0.4         | Visual QA & Interaction Hardening (stable)                     |
+| v0.1.0-alpha.1 | TIDAL Integration Foundation (in progress)                     |
+| v0.1.0-alpha.2 | Official TIDAL Player compatibility prototype (planned)        |
+| v0.2.0         | Desktop Integration (media keys, MPRIS, Windows Media Session) |
+| v0.3.0         | Experience (lyrics, Chromatic palette, visual polish)          |
+| v0.4.0+        | Providers (local files, additional backends)                   |
+| v1.0.0         | Stable                                                         |
 
 See [`docs/roadmap/README.md`](docs/roadmap/README.md) for full notes.
 
 ---
 
-## TIDAL integration note
+## TIDAL integration status
 
-Chromatic Player is an **unofficial** desktop client for TIDAL.
+Chromatic Player is an **unofficial** desktop client. The alpha.1 work uses
+the official TIDAL Auth SDK and Developer Platform OpenAPI v2 for authentication
+and read-only catalogue access. It does not use private/legacy endpoints.
 
-It is built with the explicit goal of using **only the official
-mechanisms exposed by TIDAL** for playback. It does not:
-
-- bypass DRM;
-- download, cache, or redistribute protected audio files;
-- extract streams or circumvent provider protections;
-- implement lyrics scraping or third-party API abuse.
-
-Authentication, playback and library interactions will be implemented
-through the documented public APIs in a future release.
+The current work is not live-verified: the configured HTTPS redirect requires
+an externally operated callback bridge, and a TIDAL account smoke test has not
+been completed. Playback remains mock; no TIDAL Player SDK, stream URLs, or
+audio are included. Future playback must use the official Player without DRM
+circumvention, stream extraction, downloading, or protected-media caching.
 
 TIDAL is a trademark of its respective owners. Use of the TIDAL name
 in this project is for descriptive purposes only.

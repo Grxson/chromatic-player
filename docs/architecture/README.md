@@ -18,13 +18,13 @@ Domain
 Infrastructure
 ```
 
-| Layer            | What lives here                                       |
-| ---------------- | ----------------------------------------------------- |
-| Presentation     | React components, pages, layout, app shell            |
-| Application      | Zustand stores, hooks, providers, router              |
-| Domain           | Entities, value objects, ports (interfaces)           |
-| Infrastructure   | Concrete implementations (TidalProvider, MockMusicProvider, storage) |
-| Features         | Cross-cutting UX surfaces (chromatic, queue, library)  |
+| Layer          | What lives here                                                                   |
+| -------------- | --------------------------------------------------------------------------------- |
+| Presentation   | React components, pages, layout, app shell                                        |
+| Application    | Zustand stores, hooks, providers, router                                          |
+| Domain         | Entities, value objects, ports (interfaces)                                       |
+| Infrastructure | Concrete implementations (TIDAL auth/catalogue, mock playback/catalogue, storage) |
+| Features       | Cross-cutting UX surfaces (chromatic, queue, library)                             |
 
 ### Presentation
 
@@ -40,15 +40,16 @@ keeps the UI reactive.
 
 ### Domain
 
-Pure types and contracts in `src/domain/`. The `MusicProvider`
-interface is the sole seam between the application and any concrete
-music backend. The domain has no dependency on infrastructure.
+Pure types and contracts in `src/domain/`. The domain exposes focused `MusicCatalogProvider`, `MusicAuthProvider`
+and `PlaybackBackend` ports. It has no dependency on infrastructure or
+TIDAL DTOs.
 
 ### Infrastructure
 
-Concrete adapters in `src/infrastructure/`. `MockMusicProvider`
-implements the full port against static data. `TidalProvider` will
-arrive in a later release.
+Concrete adapters in `src/infrastructure/`. `MockMusicProvider` supplies
+static catalogue and mock transport for offline work. The alpha.1 TIDAL
+adapters provide official auth and read-only catalogue access; playback
+continues to use the mock backend.
 
 ### Features
 
@@ -68,14 +69,13 @@ usePlayback (src/hooks/usePlayback.ts)
    ↓
 QueueStore + PlayerStore (src/stores/)
    ↓
-MusicProvider  ←  port
+MusicCatalogProvider + MusicAuthProvider + PlaybackBackend  ← ports
    ↓
-TidalProvider / MockMusicProvider  ←  adapters
+TidalAuthProvider + TidalCatalogProvider + MockPlaybackBackend
 ```
 
-The application never imports from `src/infrastructure/tidal` or
-`src/infrastructure/mock` directly except through provider composition
-in `src/app/providers/`. This keeps the UI agnostic about which backend
+The UI remains provider-agnostic. Concrete adapters are selected only
+at `src/app/providers/MusicProviderProvider.tsx`, the composition root. This keeps the UI agnostic about which backend
 is active.
 
 ## Playback coordination
@@ -102,22 +102,12 @@ they never compute next-track indexes themselves.
 
 ### Status lifecycle
 
-`PlayerStore.status` moves through:
-
-```
-idle ─► loading ─► playing
-                  ▲
-                  └──► paused ─► playing
-                              ▲
-                              └──► error
-```
-
-Every `usePlayback` action transitions to `loading` before calling the
-provider and then resolves to `playing` / `paused` / `error`. On error,
-the previous player snapshot is restored: the queue stays mutated,
-the requested track stays visible, the status flips to `error` and a
-short message lands in `PlayerStore.error`. The `clearQueue`,
-`removeFromQueue` and `pause` paths handle the queue-empty case.
+Track transitions move through `loading` before resolving to `playing`
+or `error`. A failed track start keeps the requested track and queue cursor
+visible and sets a safe message in `PlayerStore.error`. Pause, resume, seek,
+volume, clear and track selection await the backend. Shared operation IDs
+ignore stale completions so an older request cannot overwrite a newer action.
+Playback remains mock in v0.1.0-alpha.1.
 
 ### Removal of the current track
 
@@ -171,10 +161,10 @@ src/
 ├── domain/
 │   ├── entities/        # Track, Album, Artist, Playlist, User
 │   ├── models/          # Composite value types
-│   └── ports/           # MusicProvider + supporting contracts
+│   └── ports/           # MusicCatalogProvider, MusicAuthProvider, PlaybackBackend + entities
 ├── infrastructure/
-│   ├── mock/            # MockMusicProvider
-│   ├── tidal/           # TidalProvider (future)
+│   ├── mock/            # Mock catalogue, auth and playback
+│   ├── tidal/           # Official TIDAL auth, API adapter and mappers
 │   └── storage/         # Persistent settings (future)
 ├── features/
 │   ├── chromatic/       # Album-reactive palette + theme hook

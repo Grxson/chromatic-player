@@ -68,7 +68,7 @@ Status: **shipped**.
 
 ## v0.0.4 — Visual QA & Interaction Hardening
 
-Status: **shipped** (current release).
+Status: **shipped**.
 
 - **Queue cursor synchronisation**:
   - `playQueueIndex(index)` now calls `QueueStore.jumpTo(index)` before
@@ -87,8 +87,10 @@ Status: **shipped** (current release).
   - `PlayerStore` gains an `error` string. Every public `usePlayback`
     action transitions through `loading` before resolving to
     `playing` / `paused` / `error`.
-  - On failure the previous player snapshot is restored, the requested
-    track stays visible and a short message lands in `PlayerStore.error`.
+  - On a track-start failure, the requested track and queue cursor stay
+    synchronized, status becomes `error`, and a safe message lands in
+    `PlayerStore.error`. Other failed controls retain or restore the
+    affected observable value.
   - `seek` clamps to `[0, duration]`; `setVolume` clamps to `[0, 1]`
     before reaching the provider.
 - **Search stale-result handling** rewritten: the test mounts the
@@ -131,14 +133,21 @@ Explicitly **not** included in v0.0.4:
 - Jellyfin, local music, plugins, visualizers.
 - Real chromatic colour extraction from artwork.
 
-## Next phase
+## v0.1.0-alpha.1 — TIDAL Integration Foundation
 
-The next release will be defined in a follow-up task once the
-foundation is reviewed. Candidates are:
+Status: **in progress; live TIDAL smoke test and release gates pending**.
 
-- **v0.0.5 — Visual prototype iteration** based on review feedback.
-- **v0.1.0-alpha.1 — TIDAL Authentication & Catalog** with the
-  real `TidalProvider`.
+- Official TIDAL Auth SDK and OpenAPI v2 catalogue adapters.
+- Separate auth, catalogue and playback ports; playback remains mock.
+- TIDAL-to-domain resource mappers and read-only catalogue operations.
+- TIDAL login/session UI and playlist detail support.
+- No real audio playback, collection writes, or TIDAL Player SDK.
+- Release requires live authentication, search, album, artist, logout and
+  session-restore verification plus green CI. No tag until all gates pass.
+
+The next milestone after this foundation is **v0.1.0-alpha.2 — Official
+TIDAL Player compatibility prototype**, subject to the documented WebView
+and DRM/EME compatibility findings.
 
 ## v0.1.0 — Core Player (planned)
 

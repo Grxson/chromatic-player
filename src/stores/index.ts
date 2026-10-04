@@ -1,5 +1,5 @@
 export { useAuthStore } from "./auth.store";
-export type { AuthState } from "./auth.store";
+export type { AuthState } from "@/domain/ports";
 export { useLibraryStore } from "./library.store";
 export type { LibraryState } from "./library.store";
 export { usePlayerStore } from "./player.store";

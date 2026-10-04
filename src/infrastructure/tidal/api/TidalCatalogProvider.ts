@@ -36,6 +36,16 @@ function relationIds(data: Relationship["data"], type: string): string[] {
   return data?.filter((resource) => resource.type === type).map(({ id }) => id) ?? [];
 }
 
+function relationIdsOrIncluded(
+  data: Relationship["data"],
+  type: Included[number]["type"],
+  included: Included,
+): string[] {
+  if (data === undefined) return [];
+  const ids = relationIds(data, type);
+  return ids.length > 0 ? ids : resources(included, type).map((resource) => String(resource.id));
+}
+
 function resources<T extends Included[number]["type"]>(included: Included, type: T) {
   return includedOfType(included, type);
 }
@@ -78,9 +88,13 @@ export class TidalCatalogProvider implements MusicCatalogProvider {
     const relationships = search?.relationships;
 
     const trackIds = relationIds(relationships?.tracks?.data, "tracks");
-    const albumIds = relationIds(relationships?.albums?.data, "albums");
-    const artistIds = relationIds(relationships?.artists?.data, "artists");
-    const playlistIds = relationIds(relationships?.playlists?.data, "playlists");
+    const albumIds = relationIdsOrIncluded(relationships?.albums?.data, "albums", included);
+    const artistIds = relationIdsOrIncluded(relationships?.artists?.data, "artists", included);
+    const playlistIds = relationIdsOrIncluded(
+      relationships?.playlists?.data,
+      "playlists",
+      included,
+    );
 
     return {
       query,

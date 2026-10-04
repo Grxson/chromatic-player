@@ -11,6 +11,42 @@ function makeProvider(response: unknown) {
 }
 
 describe("TidalCatalogProvider", () => {
+  it("falls back to included catalogue resources when search relationships are empty", async () => {
+    const document = {
+      data: [
+        {
+          type: "searchResults",
+          id: "search-1",
+          relationships: {
+            tracks: { data: [{ type: "tracks", id: "track-1" }] },
+            albums: { data: [] },
+            artists: { data: [] },
+            playlists: { data: [] },
+          },
+        },
+      ],
+      included: [
+        {
+          type: "tracks",
+          id: "track-1",
+          attributes: { title: "Mapped track", duration: "PT2M" },
+        },
+        {
+          type: "albums",
+          id: "album-1",
+          attributes: { title: "Mapped album", numberOfItems: 10 },
+        },
+        { type: "artists", id: "artist-1", attributes: { name: "Mapped artist" } },
+      ],
+    };
+    const { provider } = makeProvider({ data: document });
+
+    await expect(provider.search("mapped")).resolves.toMatchObject({
+      albums: [{ id: "album-1", title: "Mapped album" }],
+      artists: [{ id: "artist-1", name: "Mapped artist" }],
+    });
+  });
+
   it("maps search result resources to provider-neutral entities", async () => {
     const document = {
       data: [

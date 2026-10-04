@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ListMusic, Trash2, X } from "lucide-react";
 import { IconButton } from "@/components/common/IconButton";
@@ -134,18 +134,25 @@ export function QueueDrawer({ open, onClose, onClosed }: QueueDrawerProps) {
                 <EmptyQueue />
               ) : (
                 <div className="space-y-1">
-                  {currentTrack ? <SectionHeading label="Now playing" /> : null}
-                  {currentTrack ? (
-                    <QueueRow index={currentIndex} isCurrent isPlaying={status === "playing"} />
-                  ) : null}
-
-                  {hasNext ? <SectionHeading label="Next up" /> : null}
                   {tracks.map((track, index) => {
-                    if (index <= currentIndex) {
-                      return null;
-                    }
+                    const isCurrent = index === currentIndex;
+                    const heading =
+                      currentTrack && index === 0 && currentIndex > 0
+                        ? "Earlier"
+                        : currentTrack && isCurrent
+                          ? "Now playing"
+                          : currentTrack && index === currentIndex + 1
+                            ? "Next up"
+                            : null;
                     return (
-                      <QueueRow key={track.id} index={index} isCurrent={false} isPlaying={false} />
+                      <Fragment key={track.id}>
+                        {heading ? <SectionHeading label={heading} /> : null}
+                        <QueueRow
+                          index={index}
+                          isCurrent={isCurrent}
+                          isPlaying={isCurrent && status === "playing"}
+                        />
+                      </Fragment>
                     );
                   })}
 

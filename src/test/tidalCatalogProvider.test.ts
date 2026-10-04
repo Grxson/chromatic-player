@@ -104,6 +104,70 @@ describe("TidalCatalogProvider", () => {
     );
   });
 
+  it("fills missing search album artists from the matching track album", async () => {
+    const document = {
+      data: [
+        {
+          type: "searchResults",
+          id: "search-1",
+          relationships: {
+            tracks: { data: [{ type: "tracks", id: "track-1" }] },
+            albums: { data: [] },
+          },
+        },
+      ],
+      included: [
+        {
+          type: "tracks",
+          id: "track-1",
+          attributes: { title: "Track from album", duration: "PT2M" },
+          relationships: {
+            artists: { data: [{ type: "artists", id: "artist-1" }] },
+            albums: { data: [{ type: "albums", id: "album-1" }] },
+          },
+        },
+        {
+          type: "albums",
+          id: "album-1",
+          attributes: { title: "Album without direct artist relation", numberOfItems: 1 },
+          relationships: { coverArt: { data: [] } },
+        },
+        { type: "artists", id: "artist-1", attributes: { name: "Mapped artist" } },
+      ],
+    };
+    const { provider } = makeProvider({ data: document });
+
+    await expect(provider.search("album")).resolves.toMatchObject({
+      albums: [{ id: "album-1", artists: [{ id: "artist-1", name: "Mapped artist" }] }],
+    });
+  });
+
+  it("uses the sole included search artist when an album has no track context", async () => {
+    const document = {
+      data: [
+        {
+          type: "searchResults",
+          id: "search-1",
+          relationships: { albums: { data: [] }, artists: { data: [] } },
+        },
+      ],
+      included: [
+        {
+          type: "albums",
+          id: "album-1",
+          attributes: { title: "Album without track context", numberOfItems: 1 },
+          relationships: { coverArt: { data: [] } },
+        },
+        { type: "artists", id: "artist-1", attributes: { name: "Mapped artist" } },
+      ],
+    };
+    const { provider } = makeProvider({ data: document });
+
+    await expect(provider.search("album")).resolves.toMatchObject({
+      albums: [{ id: "album-1", artists: [{ id: "artist-1", name: "Mapped artist" }] }],
+    });
+  });
+
   it("returns album tracks in the API relationship order", async () => {
     const document = {
       data: {
@@ -128,6 +192,32 @@ describe("TidalCatalogProvider", () => {
     await expect(provider.getAlbumTracks("album-1")).resolves.toMatchObject([
       { id: "track-2", title: "Two" },
       { id: "track-1", title: "One" },
+    ]);
+  });
+
+  it("fills missing artist albums with the artist resource context", async () => {
+    const document = {
+      data: {
+        type: "artists",
+        id: "artist-1",
+        attributes: { name: "Mapped artist" },
+        relationships: {
+          albums: { data: [{ type: "albums", id: "album-1" }] },
+        },
+      },
+      included: [
+        {
+          type: "albums",
+          id: "album-1",
+          attributes: { title: "Artist album", numberOfItems: 1 },
+          relationships: { coverArt: { data: [] } },
+        },
+      ],
+    };
+    const { provider } = makeProvider({ data: document });
+
+    await expect(provider.getArtistAlbums("artist-1")).resolves.toMatchObject([
+      { id: "album-1", artists: [{ id: "artist-1", name: "Mapped artist" }] },
     ]);
   });
 

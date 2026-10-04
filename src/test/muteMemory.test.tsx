@@ -46,9 +46,7 @@ function makeProvider(): MusicProvider {
 
 function withProvider(provider: MusicProvider) {
   return ({ children }: { children: ReactNode }) => (
-    <MusicProviderContext.Provider value={{ provider }}>
-      {children}
-    </MusicProviderContext.Provider>
+    <MusicProviderContext.Provider value={{ provider }}>{children}</MusicProviderContext.Provider>
   );
 }
 

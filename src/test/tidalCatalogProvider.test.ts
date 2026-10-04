@@ -52,7 +52,17 @@ describe("TidalCatalogProvider", () => {
       "/searchResults",
       expect.objectContaining({
         params: expect.objectContaining({
-          query: expect.objectContaining({ "filter[query]": "mapped" }),
+          query: expect.objectContaining({
+            "filter[query]": "mapped",
+            include: [
+              "tracks.artists",
+              "tracks.albums.coverArt",
+              "albums.artists",
+              "albums.coverArt",
+              "artists.profileArt",
+              "playlists",
+            ],
+          }),
         }),
       }),
     );

@@ -15,6 +15,16 @@ type Client = ReturnType<typeof createAPIClient>;
 type Relationship = { data?: Array<{ id: string; type: string }> };
 type SearchResource = components["schemas"]["SearchResults_Resource_Object"];
 
+// Keep this include tree within TIDAL's default ten-resource expansion limit.
+const SEARCH_INCLUDE = [
+  "tracks.artists",
+  "tracks.albums.coverArt",
+  "albums.artists",
+  "albums.coverArt",
+  "artists.profileArt",
+  "playlists",
+];
+
 function requireData<T>(data: T | undefined, error: unknown): T {
   if (error || data === undefined) {
     throw new Error("TIDAL catalogue is unavailable. Check your connection and session.");
@@ -58,14 +68,7 @@ export class TidalCatalogProvider implements MusicCatalogProvider {
           "filter[query]": normalized,
           deviceType: "DESKTOP",
           systemType: "DESKTOP",
-          include: [
-            "tracks.artists",
-            "tracks.albums.coverArt",
-            "albums.artists",
-            "albums.coverArt",
-            "artists.profileArt",
-            "playlists.coverArt",
-          ],
+          include: SEARCH_INCLUDE,
         },
       },
     });

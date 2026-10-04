@@ -15,6 +15,9 @@ function Resource({ resourceKey, producer }: ResourceProps) {
       <span data-testid="status">{resource.status}</span>
       <span data-testid="data">{resource.data ?? ""}</span>
       <span data-testid="error">{resource.error ?? ""}</span>
+      <button type="button" onClick={resource.retry}>
+        retry
+      </button>
     </div>
   );
 }
@@ -64,6 +67,20 @@ describe("useAsyncResource", () => {
       expect(getByTestId("status").textContent).toBe("error");
     });
     expect(getByTestId("error").textContent).toBe("nope");
+  });
+
+  it("retries a failed request without changing its key", async () => {
+    let attempts = 0;
+    const producer = () => {
+      attempts += 1;
+      return attempts === 1 ? Promise.reject(new Error("offline")) : Promise.resolve("recovered");
+    };
+    const { getByTestId, getByRole } = render(<Resource resourceKey="same" producer={producer} />);
+
+    await waitFor(() => expect(getByTestId("status").textContent).toBe("error"));
+    act(() => getByRole("button", { name: "retry" }).click());
+    await waitFor(() => expect(getByTestId("data").textContent).toBe("recovered"));
+    expect(attempts).toBe(2);
   });
 
   it("resets to loading when the key changes", async () => {

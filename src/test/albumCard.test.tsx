@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Album } from "@/domain/entities";
 import { AlbumCard } from "@/components/music/AlbumCard";
+import { Artwork } from "@/components/music/Artwork";
 
 const album: Album = {
   id: "white-pony",
@@ -17,6 +18,16 @@ afterEach(() => {
 });
 
 describe("AlbumCard", () => {
+  it("replaces a failed artwork request with the chromatic fallback", () => {
+    const { container } = render(<Artwork src="https://example.invalid/cover.jpg" alt="Cover" />);
+    const image = screen.getByRole("img", { name: "Cover" });
+
+    fireEvent.error(image);
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByRole("img", { name: "Cover" })).toBeTruthy();
+  });
+
   it("renders album metadata and a non-broken artwork fallback", () => {
     render(<AlbumCard album={album} />);
 

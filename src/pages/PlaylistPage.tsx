@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { Artwork } from "@/components/music/Artwork";
 import { TrackRow } from "@/components/music/TrackRow";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Button } from "@/components/common/Button/Button";
 import { Spinner } from "@/components/common/Spinner";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
@@ -15,6 +16,7 @@ import { usePlayerStore } from "@/stores/player.store";
 interface PlaylistData {
   playlist: Playlist;
   tracks: Track[];
+  tracksError: boolean;
 }
 
 export function PlaylistPage({ playlistId }: { playlistId: string }) {
@@ -23,13 +25,16 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const status = usePlayerStore((state) => state.status);
   const loader = useCallback(async (): Promise<PlaylistData> => {
-    const [playlist, tracks] = await Promise.all([
-      provider.getPlaylist(playlistId),
-      provider.getPlaylistTracks(playlistId),
-    ]);
-    return { playlist, tracks };
+    const playlist = await provider.getPlaylist(playlistId);
+    try {
+      const tracks = await provider.getPlaylistTracks(playlistId);
+      return { playlist, tracks, tracksError: false };
+    } catch (error) {
+      console.error("Playlist tracks request failed", error);
+      return { playlist, tracks: [], tracksError: true };
+    }
   }, [provider, playlistId]);
-  const { status: loadStatus, data, error } = useAsyncResource<PlaylistData>(playlistId, loader);
+  const { status: loadStatus, data, retry } = useAsyncResource<PlaylistData>(playlistId, loader);
 
   if (loadStatus === "idle" || loadStatus === "loading") {
     return (
@@ -51,7 +56,12 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
           <EmptyState
             icon={<ListMusic size={20} />}
             title="Playlist unavailable"
-            description={error ?? "We could not load this playlist."}
+            description="We couldn't load this playlist. Check your connection and try again."
+            action={
+              <Button variant="secondary" size="sm" onClick={retry}>
+                Retry
+              </Button>
+            }
           />
         </Content>
       </>
@@ -86,26 +96,54 @@ export function PlaylistPage({ playlistId }: { playlistId: string }) {
             <p className="text-sm text-[var(--color-text-muted)]">{data.tracks.length} tracks</p>
             <button
               type="button"
-              disabled={data.tracks.length === 0}
+              disabled={data.tracks.length === 0 || provider.name === "tidal-catalog"}
               onClick={() => void playback.playQueue(data.tracks, 0)}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--color-album-accent)] px-5 py-2 text-sm font-medium text-[var(--color-canvas)] disabled:opacity-50"
             >
               <Play size={16} aria-hidden="true" /> Play playlist
             </button>
+            {provider.name === "tidal-catalog" ? (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                TIDAL audio is unavailable in this build. Play local files from Library.
+              </p>
+            ) : null}
           </div>
         </section>
-        <div className="mt-10 space-y-1">
-          {data.tracks.map((track, index) => (
-            <TrackRow
-              key={`${index}-${track.id}`}
-              track={track}
-              index={index}
-              isCurrent={currentTrack?.id === track.id}
-              isPlaying={status === "playing" && currentTrack?.id === track.id}
-              onPlay={() => void playback.playQueue(data.tracks, index)}
-            />
-          ))}
-        </div>
+        {data.tracks.length === 0 ? (
+          <EmptyState
+            icon={<ListMusic size={20} aria-hidden="true" />}
+            title={data.tracksError ? "Couldn't load playlist tracks" : "This playlist is empty"}
+            description={
+              data.tracksError
+                ? "Check your connection and retry."
+                : "There are no playable tracks in this playlist yet."
+            }
+            action={
+              data.tracksError ? (
+                <Button variant="secondary" size="sm" onClick={retry}>
+                  Retry
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="mt-10 space-y-1">
+            {data.tracks.map((track, index) => (
+              <TrackRow
+                key={`${index}-${track.id}`}
+                track={track}
+                index={index}
+                isCurrent={currentTrack?.id === track.id}
+                isPlaying={status === "playing" && currentTrack?.id === track.id}
+                onPlay={
+                  provider.name === "tidal-catalog"
+                    ? undefined
+                    : () => void playback.playQueue(data.tracks, index)
+                }
+              />
+            ))}
+          </div>
+        )}
       </Content>
     </>
   );

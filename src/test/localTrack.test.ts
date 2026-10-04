@@ -33,7 +33,7 @@ describe("local track import", () => {
       duration: 0,
       artist: { name: "Unknown Artist" },
     });
-    expect(imported.track.album).toBeUndefined();
+    expect(imported.track.album).toMatchObject({ title: "Unknown Album" });
     expect(imported.audioUrl).toBe("blob:local-audio");
   });
 

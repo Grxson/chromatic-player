@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 
 export type AsyncStatus = "idle" | "loading" | "success" | "error";
 
@@ -6,6 +6,7 @@ export interface AsyncResource<T> {
   status: AsyncStatus;
   data: T | null;
   error: string | null;
+  retry: () => void;
 }
 
 interface State<T> {
@@ -40,12 +41,12 @@ function reducer<T>(_state: State<T>, action: Action<T>): State<T> {
  * - A stale-result guard is in place: only the most recent request can
  *   update the state. Older requests are dropped.
  *
- * Implementation note: we use `useReducer` so the reset is a pure state
- * transition and we avoid the synchronous setState anti-pattern. The
- * `dispatch({ type: "reset" })` call inside the effect is intentional —
- * it is the correct way to mark the resource as transitioning.
+ * The producer identity is observed so provider changes trigger a reload.
+ * `retry` increments a request generation without changing the resource key.
  */
 export function useAsyncResource<T>(key: string, producer: () => Promise<T>): AsyncResource<T> {
+  const [requestVersion, setRequestVersion] = useState(0);
+  const retry = useCallback(() => setRequestVersion((version) => version + 1), []);
   const [state, dispatch] = useReducer(reducer<T>, {
     status: "loading",
     data: null,
@@ -69,16 +70,14 @@ export function useAsyncResource<T>(key: string, producer: () => Promise<T>): As
           return;
         }
         const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("Async resource request failed", err);
         dispatch({ type: "error", message });
       });
 
     return () => {
       cancelled = true;
     };
-    // The producer closure is intentionally not part of the dependency
-    // array: it is recreated on every render by callers, and `key` is
-    // what represents the resource identity.
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, producer, requestVersion]);
 
-  return state;
+  return { ...state, retry };
 }

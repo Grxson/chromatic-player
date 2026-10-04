@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Play } from "lucide-react";
+import { Library, Music2, Play, Search as SearchIcon } from "lucide-react";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { AlbumCard } from "@/components/music/AlbumCard";
@@ -7,12 +7,15 @@ import { ArtistCard } from "@/components/music/ArtistCard";
 import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { TrackRow } from "@/components/music/TrackRow";
 import { Skeleton } from "@/components/common/Skeleton";
+import { Button } from "@/components/common/Button/Button";
+import { EmptyState } from "@/components/common/EmptyState";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { useAuthStore } from "@/stores/auth.store";
 import { usePlayback } from "@/hooks/usePlayback";
 import { useRouter } from "@/app/router/useRouter";
 import { usePlayerStore } from "@/stores/player.store";
+import { useLocalLibraryStore } from "@/stores/localLibrary.store";
 import type { Album, Artist, Playlist, Track } from "@/domain/entities";
 
 interface HomeData {
@@ -40,6 +43,8 @@ export function HomePage() {
   const playback = usePlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const playerStatus = usePlayerStore((state) => state.status);
+  const localTracks = useLocalLibraryStore((state) => state.tracks);
   const authStatus = useAuthStore((state) => state.status);
 
   const loader = useCallback(async (): Promise<HomeData> => {
@@ -54,8 +59,13 @@ export function HomePage() {
     const albumIds = albums.slice(0, 1).map((a) => a.id);
     const tracksByAlbum = await Promise.all(
       albumIds.map(async (id) => {
-        const t = await provider.getAlbumTracks(id);
-        return [id, t] as const;
+        try {
+          const tracks = await provider.getAlbumTracks(id);
+          return [id, tracks] as const;
+        } catch (error) {
+          console.error("Home album tracks request failed", error);
+          return [id, [] as Track[]] as const;
+        }
       }),
     );
     const albumTracks: Record<string, Track[]> = {};
@@ -74,7 +84,7 @@ export function HomePage() {
     };
   }, [provider]);
 
-  const { status, data } = useAsyncResource<HomeData>("home", loader);
+  const { status, data, retry } = useAsyncResource<HomeData>("home", loader);
   const view = data ?? PLACEHOLDER;
   const loading = status === "loading" || status === "idle";
 
@@ -84,13 +94,127 @@ export function HomePage() {
     [heroAlbum, view.albumTracks],
   );
   const heroTracks = useMemo(() => view.recent.slice(0, 5), [view.recent]);
-
   const handleHeroPlay = useCallback(() => {
     if (heroAlbumTracks.length === 0 || !heroAlbum) {
       return;
     }
     void playback.playQueue(heroAlbumTracks, 0);
   }, [heroAlbumTracks, heroAlbum, playback]);
+
+  if (provider.name === "tidal-catalog") {
+    return (
+      <>
+        <Header
+          eyebrow="Your listening space"
+          title="Home"
+          subtitle="Explore TIDAL's catalogue or play music stored on this device."
+        />
+        <Content>
+          <div className="mx-auto flex max-w-5xl flex-col gap-10">
+            <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-7 sm:p-9">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 opacity-50"
+                style={{
+                  background:
+                    "radial-gradient(60% 100% at 0% 50%, var(--chromatic-glow-primary), transparent 65%)",
+                }}
+              />
+              <div className="relative max-w-2xl">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                  Chromatic Player
+                </p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--color-text-primary)] sm:text-4xl">
+                  Music first. Your sources, separate.
+                </h2>
+                <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--color-text-secondary)]">
+                  {authStatus === "authenticated"
+                    ? "Explore TIDAL's catalogue. Full TIDAL audio isn't available in this build; local audio plays on this device."
+                    : "Connect TIDAL to explore its catalogue, or add music stored on this device. TIDAL audio isn't available in this build."}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button
+                    onClick={() =>
+                      navigate({
+                        type: "view",
+                        view: authStatus === "authenticated" ? "search" : "settings",
+                      })
+                    }
+                  >
+                    <SearchIcon size={15} aria-hidden="true" />
+                    {authStatus === "authenticated" ? "Search TIDAL" : "Connect TIDAL"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate({ type: "view", view: "library" })}
+                  >
+                    <Library size={15} aria-hidden="true" />
+                    Open local library
+                  </Button>
+                </div>
+              </div>
+            </section>
+
+            <section aria-labelledby="home-local-heading" className="space-y-4">
+              <div className="flex items-baseline justify-between gap-4">
+                <div>
+                  <h2
+                    id="home-local-heading"
+                    className="text-lg font-medium text-[var(--color-text-primary)]"
+                  >
+                    Local music
+                  </h2>
+                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                    {localTracks.length > 0
+                      ? `${localTracks.length} track${localTracks.length === 1 ? "" : "s"} in this session`
+                      : "Files you choose stay on this device."}
+                  </p>
+                </div>
+                {localTracks.length > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate({ type: "view", view: "library" })}
+                  >
+                    View library
+                  </Button>
+                ) : null}
+              </div>
+              {localTracks.length === 0 ? (
+                <EmptyState
+                  icon={<Music2 size={20} aria-hidden="true" />}
+                  title="Start with your own music"
+                  description="Choose local audio files to build a private, session-only library."
+                  action={
+                    <Button
+                      variant="secondary"
+                      onClick={() => navigate({ type: "view", view: "library" })}
+                    >
+                      <Library size={15} aria-hidden="true" />
+                      Add music
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="space-y-1">
+                  {localTracks.slice(0, 8).map((track, index) => (
+                    <TrackRow
+                      key={track.id}
+                      track={track}
+                      index={index}
+                      isCurrent={currentTrack?.id === track.id}
+                      isPlaying={playerStatus === "playing" && currentTrack?.id === track.id}
+                      onPlay={() => void playback.playQueue(localTracks, index)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </Content>
+      </>
+    );
+  }
 
   return (
     <>
@@ -99,11 +223,24 @@ export function HomePage() {
         title={provider.name === "tidal-catalog" ? "Connected to TIDAL" : "Good evening"}
         subtitle={
           provider.name === "tidal-catalog"
-            ? "Browse the official catalogue. Playback remains a local mock in this alpha."
+            ? "Browse TIDAL's catalogue and play audio files from your local library."
             : "A quiet session of the catalogue."
         }
       />
       <Content>
+        {status === "error" ? (
+          <div
+            role="alert"
+            className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          >
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Couldn't load the catalogue. Check your connection and try again.
+            </p>
+            <Button variant="secondary" size="sm" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         {provider.name === "tidal-catalog" ? (
           <section className="mb-10 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
             <div>
@@ -134,7 +271,11 @@ export function HomePage() {
         ) : null}
         <div className="space-y-12">
           {heroAlbum ? (
-            <Hero album={heroAlbum} onPlay={handleHeroPlay} canPlay={heroAlbumTracks.length > 0} />
+            <Hero
+              album={heroAlbum}
+              onPlay={handleHeroPlay}
+              canPlay={provider.name !== "tidal-catalog" && heroAlbumTracks.length > 0}
+            />
           ) : null}
 
           <Section
@@ -149,10 +290,12 @@ export function HomePage() {
                   track={track}
                   index={index}
                   isCurrent={currentTrack?.id === track.id}
-                  isPlaying={currentTrack?.id === track.id}
-                  onPlay={() => {
-                    void playback.playQueue(heroTracks, index);
-                  }}
+                  isPlaying={playerStatus === "playing" && currentTrack?.id === track.id}
+                  onPlay={
+                    provider.name === "tidal-catalog"
+                      ? undefined
+                      : () => void playback.playQueue(heroTracks, index)
+                  }
                 />
               ))}
             </div>

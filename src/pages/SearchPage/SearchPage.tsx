@@ -32,6 +32,7 @@ const INITIAL_STATE: SearchState = {
 };
 
 const DEBOUNCE_MS = 180;
+const SEARCH_ERROR_MESSAGE = "Couldn't load search results. Check your connection and try again.";
 
 function hasAnyResults(result: SearchResult | null): boolean {
   if (!result) {
@@ -98,12 +99,12 @@ export function SearchPage() {
         if (sequenceRef.current !== requestId) {
           return;
         }
-        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("Search request failed", err);
         setSearchState({
           phase: "error",
           query: trimmed,
           result: null,
-          error: message,
+          error: SEARCH_ERROR_MESSAGE,
         });
       }
     },
@@ -112,6 +113,8 @@ export function SearchPage() {
 
   // Debounced re-run whenever the input draft changes.
   useEffect(() => {
+    // Invalidate in-flight results immediately, not only after the debounce.
+    sequenceRef.current += 1;
     const handle = setTimeout(() => {
       void runSearch(draft);
     }, DEBOUNCE_MS);
@@ -152,7 +155,8 @@ export function SearchPage() {
 
           {provider.name === "tidal-catalog" ? (
             <p className="-mt-4 text-xs text-[var(--color-text-muted)]">
-              TIDAL catalogue results are live; playback currently uses the mock backend.
+              TIDAL catalogue is live. TIDAL audio is unavailable in this build; local files play
+              from Library.
             </p>
           ) : null}
 
@@ -174,7 +178,16 @@ export function SearchPage() {
             <EmptyState
               icon={<AlertCircle size={20} aria-hidden="true" />}
               title="Search failed"
-              description={searchState.error ?? "Unknown error."}
+              description={searchState.error ?? SEARCH_ERROR_MESSAGE}
+              action={
+                <button
+                  type="button"
+                  onClick={() => void runSearch(searchState.query)}
+                  className="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface)]"
+                >
+                  Retry
+                </button>
+              }
             />
           ) : searchState.phase === "empty" ? (
             <EmptyState
@@ -186,16 +199,24 @@ export function SearchPage() {
             <Results
               result={searchState.result!}
               onOpenAlbum={(album) => navigate({ type: "album", id: album.id })}
-              onPlayAlbum={(album) => void albumPlayback.playAlbum(album)}
+              onPlayAlbum={
+                provider.name === "tidal-catalog"
+                  ? undefined
+                  : (album) => void albumPlayback.playAlbum(album)
+              }
               loadingAlbumId={albumPlayback.loadingAlbumId}
               onOpenArtist={(artist) => navigate({ type: "artist", id: artist.id })}
               onOpenPlaylist={(playlist) => navigate({ type: "playlist", id: playlist.id })}
               // Search results are a flat discovery list, not a coherent
               // queue. Playback treats them as isolated tracks so we
               // don't fabricate context that wasn't there.
-              onPlayTrack={(track) => {
-                void playback.playTrack(track);
-              }}
+              onPlayTrack={
+                provider.name === "tidal-catalog"
+                  ? undefined
+                  : (track) => {
+                      void playback.playTrack(track);
+                    }
+              }
             />
           )}
           {albumPlayback.error ? (
@@ -212,11 +233,11 @@ export function SearchPage() {
 interface ResultsProps {
   result: SearchResult;
   onOpenAlbum: (album: Album) => void;
-  onPlayAlbum: (album: Album) => void;
+  onPlayAlbum?: (album: Album) => void;
   loadingAlbumId: string | null;
   onOpenArtist: (artist: Artist) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
-  onPlayTrack: (track: Track) => void;
+  onPlayTrack?: (track: Track) => void;
 }
 
 function Results({

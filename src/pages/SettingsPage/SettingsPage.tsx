@@ -100,6 +100,32 @@ export function SettingsPage() {
             )}
           </SettingsGroup>
 
+          <SettingsGroup title="Playback sources" description="What can play in this build.">
+            <Row label="TIDAL catalogue">
+              <span className="text-sm text-[var(--color-text-secondary)]">
+                {authProvider.name !== "tidal-auth"
+                  ? "Demo data"
+                  : authStatus === "authenticated"
+                    ? "Connected"
+                    : authStatus === "authenticating"
+                      ? "Connecting…"
+                      : authStatus === "error"
+                        ? "Connection issue"
+                        : "Not connected"}
+              </span>
+            </Row>
+            <Row label="TIDAL audio">
+              <span className="text-sm text-[var(--color-text-muted)]">
+                Unavailable in this build
+              </span>
+            </Row>
+            <Row label="Local audio">
+              <span className="text-sm text-[var(--color-text-secondary)]">
+                {authProvider.name === "tidal-auth" ? "Available" : "Mock playback"}
+              </span>
+            </Row>
+          </SettingsGroup>
+
           <SettingsGroup title="Playback" description="Audio preferences.">
             <Row label="Volume">
               <div className="w-48">
@@ -116,6 +142,7 @@ export function SettingsPage() {
             <Row label="Audio quality">
               <select
                 value={audioQuality}
+                disabled={authProvider.name === "tidal-auth"}
                 onChange={(event) => setAudioQuality(event.target.value as AudioQuality)}
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-sm text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-text-secondary)]"
               >
@@ -125,7 +152,9 @@ export function SettingsPage() {
                 <option value="MAX">Max</option>
               </select>
               <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                Applies when TIDAL playback is available.
+                {authProvider.name === "tidal-auth"
+                  ? "TIDAL audio isn't available in this build."
+                  : "For future TIDAL playback."}
               </span>
             </Row>
           </SettingsGroup>

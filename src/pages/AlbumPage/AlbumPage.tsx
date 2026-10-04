@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { Artwork } from "@/components/music/Artwork";
 import { TrackRow } from "@/components/music/TrackRow";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Button } from "@/components/common/Button/Button";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { useAlbumPlayback } from "@/hooks/useAlbumPlayback";
@@ -21,6 +22,7 @@ export interface AlbumPageProps {
 interface AlbumData {
   album: Album;
   tracks: Track[];
+  tracksError: boolean;
 }
 
 export function AlbumPage({ albumId }: AlbumPageProps) {
@@ -32,7 +34,7 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
   const status = usePlayerStore((state) => state.status);
 
   const loader = useCallback(() => loadAlbum(provider, albumId), [provider, albumId]);
-  const { status: loadStatus, data, error } = useAsyncResource<AlbumData>(albumId, loader);
+  const { status: loadStatus, data, retry } = useAsyncResource<AlbumData>(albumId, loader);
 
   if (loadStatus === "loading" || loadStatus === "idle") {
     return (
@@ -70,16 +72,22 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
           <EmptyState
             icon={<Disc3 size={20} aria-hidden="true" />}
             title="We couldn't load this album"
-            description={error ?? "The album may no longer be available."}
+            description="The album may no longer be available. Check your connection and try again."
+            action={
+              <Button variant="secondary" size="sm" onClick={retry}>
+                Retry
+              </Button>
+            }
           />
         </Content>
       </>
     );
   }
 
-  const { album, tracks } = data;
+  const { album, tracks, tracksError } = data;
   const totalDuration = tracks.reduce((sum, track) => sum + track.duration, 0);
   const releaseYear = album.releaseDate ? new Date(album.releaseDate).getFullYear() : null;
+  const canPlayCatalog = provider.name !== "tidal-catalog";
   const isCurrentAlbum = currentTrack?.album?.id === album.id;
   const isPlayingThis = isCurrentAlbum && status === "playing";
   const artistsLine = album.artists.map((artist) => artist.name).join(", ");
@@ -141,7 +149,9 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
             <button
               type="button"
               onClick={() => void albumPlayback.playAlbum(album, tracks)}
-              disabled={tracks.length === 0 || albumPlayback.loadingAlbumId === album.id}
+              disabled={
+                !canPlayCatalog || tracks.length === 0 || albumPlayback.loadingAlbumId === album.id
+              }
               className="inline-flex items-center gap-2 rounded-md bg-[var(--color-album-accent)] px-5 py-2.5 text-sm font-medium text-[var(--color-canvas)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-album-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-canvas)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Play size={16} aria-hidden="true" className="translate-x-px" />
@@ -154,7 +164,8 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
             ) : null}
             {provider.name === "tidal-catalog" ? (
               <p className="text-xs text-[var(--color-text-muted)]">
-                TIDAL metadata is live; audio playback currently uses the mock backend.
+                TIDAL metadata is live. TIDAL audio is unavailable in this build; local files play
+                from Library.
               </p>
             ) : null}
           </div>
@@ -168,9 +179,18 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
 
         <section className="mt-10 pb-8" aria-label={`${album.title} tracks`}>
           {tracks.length === 0 ? (
-            <p className="py-8 text-sm text-[var(--color-text-secondary)]">
-              No tracks are available for this album.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3 py-8">
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                {tracksError
+                  ? "Couldn't load this album's tracks. Check your connection and retry."
+                  : "No tracks are available for this album."}
+              </p>
+              {tracksError ? (
+                <Button variant="secondary" size="sm" onClick={retry}>
+                  Retry
+                </Button>
+              ) : null}
+            </div>
           ) : (
             <div className="space-y-1">
               {tracks.map((track, index) => (
@@ -181,13 +201,17 @@ export function AlbumPage({ albumId }: AlbumPageProps) {
                   isCurrent={currentTrack?.id === track.id}
                   isPlaying={isPlayingThis && currentTrack?.id === track.id}
                   onOpenArtist={(artist) => navigate({ type: "artist", id: artist.id })}
-                  onPlay={() => {
-                    if (currentTrack?.id === track.id && isPlayingThis) {
-                      void playback.togglePlay();
-                    } else {
-                      void albumPlayback.playAlbum(album, tracks, index);
-                    }
-                  }}
+                  onPlay={
+                    canPlayCatalog
+                      ? () => {
+                          if (currentTrack?.id === track.id && isPlayingThis) {
+                            void playback.togglePlay();
+                          } else {
+                            void albumPlayback.playAlbum(album, tracks, index);
+                          }
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -215,9 +239,12 @@ async function loadAlbum(
   provider: ReturnType<typeof useCatalogProvider>,
   albumId: string,
 ): Promise<AlbumData> {
-  const [album, tracks] = await Promise.all([
-    provider.getAlbum(albumId),
-    provider.getAlbumTracks(albumId),
-  ]);
-  return { album, tracks };
+  const album = await provider.getAlbum(albumId);
+  try {
+    const tracks = await provider.getAlbumTracks(albumId);
+    return { album, tracks, tracksError: false };
+  } catch (error) {
+    console.error("Album tracks request failed", error);
+    return { album, tracks: [], tracksError: true };
+  }
 }

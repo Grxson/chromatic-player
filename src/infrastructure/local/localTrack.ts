@@ -36,24 +36,23 @@ export async function mapLocalFile(file: File): Promise<ImportedLocalTrack> {
     id: `local-artist:${metadata.common.artist ?? "unknown"}`,
     name: metadata.common.artist?.trim() || "Unknown Artist",
   };
-  const album: Album | undefined = metadata.common.album
-    ? {
-        id: `local-album:${metadata.common.album}`,
-        title: metadata.common.album,
-        artists: [artist],
-        trackCount: 0,
-        duration: 0,
-        ...(metadata.common.picture?.[0]
-          ? {
-              artworkUrl: URL.createObjectURL(
-                new Blob([metadata.common.picture[0].data.slice().buffer as ArrayBuffer], {
-                  type: metadata.common.picture[0].format,
-                }),
-              ),
-            }
-          : {}),
-      }
-    : undefined;
+  const albumTitle = metadata.common.album?.trim() || "Unknown Album";
+  const album: Album = {
+    id: `local-album:${artist.id}:${albumTitle}`,
+    title: albumTitle,
+    artists: [artist],
+    trackCount: 0,
+    duration: 0,
+    ...(metadata.common.picture?.[0]
+      ? {
+          artworkUrl: URL.createObjectURL(
+            new Blob([metadata.common.picture[0].data.slice().buffer as ArrayBuffer], {
+              type: metadata.common.picture[0].format,
+            }),
+          ),
+        }
+      : {}),
+  };
   const artworkUrl = album?.artworkUrl;
   const track: Track = {
     id,
@@ -61,7 +60,7 @@ export async function mapLocalFile(file: File): Promise<ImportedLocalTrack> {
     title: metadata.common.title?.trim() || fileName,
     duration: metadata.format.duration ?? 0,
     artist,
-    ...(album ? { album } : {}),
+    album,
     ...(artworkUrl ? { artworkUrl } : {}),
     ...(metadata.common.track?.no ? { trackNumber: metadata.common.track.no } : {}),
   };

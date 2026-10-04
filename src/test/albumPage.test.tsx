@@ -106,13 +106,26 @@ describe("AlbumPage", () => {
     expect(navigate).toHaveBeenCalledWith({ type: "artist", id: "deftones" });
   });
 
-  it("shows an album error instead of a blank page when catalogue loading fails", async () => {
+  it("keeps album details visible and offers a retry when track loading fails", async () => {
     const provider = makeProvider();
     vi.mocked(provider.getAlbumTracks).mockRejectedValue(new Error("offline"));
     renderAlbumPage(provider);
 
-    expect(await screen.findByText("We couldn't load this album")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Search" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "White Pony" })).toBeTruthy();
+    expect(screen.getByText(/couldn't load this album's tracks/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("retries an album track request without navigating away", async () => {
+    const provider = makeProvider();
+    vi.mocked(provider.getAlbumTracks)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(tracks);
+    renderAlbumPage(provider);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("Change")).toBeTruthy();
+    expect(provider.getAlbumTracks).toHaveBeenCalledTimes(2);
   });
 
   it("plays the loaded album from its first track", async () => {

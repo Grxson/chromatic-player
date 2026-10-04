@@ -8,6 +8,7 @@ import { ArtistCard } from "@/components/music/ArtistCard";
 import { PlaylistCard } from "@/components/music/PlaylistCard";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/common/Skeleton";
+import { Button } from "@/components/common/Button/Button";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
@@ -57,7 +58,7 @@ export function LibraryPage() {
   const addImported = useLocalLibraryStore((state) => state.addImported);
 
   const loader = useCallback(() => loadLibrary(provider), [provider]);
-  const { status: loadStatus, data } = useAsyncResource<LibraryData>("library", loader);
+  const { status: loadStatus, data, retry } = useAsyncResource<LibraryData>("library", loader);
   const all = data ?? PLACEHOLDER;
   const loading = loadStatus === "loading" || loadStatus === "idle";
 
@@ -97,6 +98,19 @@ export function LibraryPage() {
         subtitle="Your local music alongside saved TIDAL albums and artists."
       />
       <Content>
+        {loadStatus === "error" ? (
+          <div
+            role="alert"
+            className="mb-8 flex flex-wrap items-center justify-between gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3"
+          >
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Couldn't load saved catalogue items. Local music is still available.
+            </p>
+            <Button variant="secondary" size="sm" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
         <div className="space-y-8">
           <div
             role="tablist"
@@ -222,9 +236,11 @@ export function LibraryPage() {
                     index={index}
                     isCurrent={currentTrack?.id === track.id}
                     isPlaying={isPlayingThis && currentTrack?.id === track.id}
-                    onPlay={() => {
-                      void playback.playQueue(tracks, index);
-                    }}
+                    onPlay={
+                      provider.name === "tidal-catalog"
+                        ? undefined
+                        : () => void playback.playQueue(tracks, index)
+                    }
                   />
                 ))}
               </div>

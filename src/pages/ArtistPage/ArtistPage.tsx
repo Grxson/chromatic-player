@@ -7,6 +7,7 @@ import { Artwork } from "@/components/music/Artwork";
 import { AlbumCard } from "@/components/music/AlbumCard";
 import { TrackRow } from "@/components/music/TrackRow";
 import { EmptyState } from "@/components/common/EmptyState";
+import { Button } from "@/components/common/Button/Button";
 import { Spinner } from "@/components/common/Spinner";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
@@ -22,6 +23,7 @@ export interface ArtistPageProps {
 interface ArtistData {
   artist: Artist;
   albums: Album[];
+  albumsError: boolean;
   tracks: Track[];
 }
 
@@ -34,7 +36,7 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
   const status = usePlayerStore((state) => state.status);
 
   const loader = useCallback(() => loadArtist(provider, artistId), [provider, artistId]);
-  const { status: loadStatus, data, error } = useAsyncResource<ArtistData>(artistId, loader);
+  const { status: loadStatus, data, retry } = useAsyncResource<ArtistData>(artistId, loader);
 
   if (loadStatus === "loading" || loadStatus === "idle") {
     return (
@@ -57,14 +59,19 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
           <EmptyState
             icon={<Mic2 size={20} aria-hidden="true" />}
             title="Artist unavailable"
-            description={error ?? "We could not load this artist."}
+            description="We couldn't load this artist. Check your connection and try again."
+            action={
+              <Button variant="secondary" size="sm" onClick={retry}>
+                Retry
+              </Button>
+            }
           />
         </Content>
       </>
     );
   }
 
-  const { artist, albums, tracks } = data;
+  const { artist, albums, albumsError, tracks } = data;
   const isCurrentArtist = currentTrack?.artist.id === artist.id;
   const isPlaying = isCurrentArtist && status === "playing";
 
@@ -108,17 +115,16 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
             <p className="text-sm text-[var(--color-text-secondary)]">
               {albums.length} {albums.length === 1 ? "album" : "albums"} · {tracks.length} tracks
             </p>
-            <div className="flex flex-wrap gap-2">
+            {tracks.length > 0 && provider.name !== "tidal-catalog" ? (
               <button
                 type="button"
                 onClick={handlePlayAll}
-                disabled={tracks.length === 0}
-                className="inline-flex items-center gap-2 rounded-md bg-[var(--color-album-accent)] px-5 py-2 text-sm font-medium text-[var(--color-canvas)] hover:brightness-110 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-[var(--color-album-accent)] px-5 py-2 text-sm font-medium text-[var(--color-canvas)] hover:brightness-110"
               >
                 <Play size={16} aria-hidden="true" className="translate-x-[1px]" />
                 Play tracks
               </button>
-            </div>
+            ) : null}
             {isCurrentArtist ? (
               <p className="text-xs text-[var(--color-text-muted)]">
                 {isPlaying ? "Now playing from this artist" : "Paused on this artist"}
@@ -129,7 +135,8 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
 
         {provider.name === "tidal-catalog" ? (
           <p className="mt-6 text-xs text-[var(--color-text-muted)]">
-            TIDAL catalogue metadata is live; playback currently uses the mock backend.
+            TIDAL metadata is live. TIDAL audio is unavailable in this build; local files play from
+            Library.
           </p>
         ) : null}
 
@@ -169,7 +176,11 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
                     onOpen={(a) => {
                       navigate({ type: "album", id: a.id });
                     }}
-                    onPlay={(a) => void albumPlayback.playAlbum(a)}
+                    onPlay={
+                      provider.name === "tidal-catalog"
+                        ? undefined
+                        : (a) => void albumPlayback.playAlbum(a)
+                    }
                     isLoading={albumPlayback.loadingAlbumId === album.id}
                   />
                 ))}
@@ -180,7 +191,24 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
                 </p>
               ) : null}
             </section>
-          ) : null}
+          ) : (
+            <EmptyState
+              icon={<Mic2 size={20} aria-hidden="true" />}
+              title={albumsError ? "Couldn't load albums" : "No albums available"}
+              description={
+                albumsError
+                  ? "Check your connection and retry."
+                  : "This artist has no albums in the catalogue right now."
+              }
+              action={
+                albumsError ? (
+                  <Button variant="secondary" size="sm" onClick={retry}>
+                    Retry
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
         </div>
       </Content>
     </>
@@ -191,11 +219,16 @@ async function loadArtist(
   provider: ReturnType<typeof useCatalogProvider>,
   artistId: string,
 ): Promise<ArtistData> {
-  const [artist, albums] = await Promise.all([
-    provider.getArtist(artistId),
-    provider.getArtistAlbums(artistId),
-  ]);
+  const artist = await provider.getArtist(artistId);
+  let albums: Album[] = [];
+  let albumsError = false;
+  try {
+    albums = await provider.getArtistAlbums(artistId);
+  } catch (error) {
+    albumsError = true;
+    console.error("Artist albums request failed", error);
+  }
   // The public catalog contract does not currently guarantee an artist
   // popular-tracks relationship, so avoid fanning out into one request per album.
-  return { artist, albums, tracks: [] };
+  return { artist, albums, albumsError, tracks: [] };
 }

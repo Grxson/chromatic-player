@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { Music2 } from "lucide-react";
 import { artworkFor, type MockArtworkSeed } from "@/mocks/artwork/artwork";
 
@@ -48,6 +48,7 @@ export function Artwork({
   seedKey,
   fluid = false,
 }: ArtworkProps) {
+  const [failedSource, setFailedSource] = useState<string | null>(null);
   const style = useMemo<CSSProperties>(
     () => (fluid ? { width: "100%", aspectRatio: "1 / 1" } : { width: size, height: size }),
     [fluid, size],
@@ -61,7 +62,7 @@ export function Artwork({
     .filter(Boolean)
     .join(" ");
 
-  if (!src) {
+  if (!src || failedSource === src) {
     const seed = artworkFor(deriveSeedKey(alt, seedKey));
     return (
       <div role="img" aria-label={alt} className={classes} style={style} data-seed={seed.variant}>
@@ -71,7 +72,15 @@ export function Artwork({
   }
 
   return (
-    <img src={src} alt={alt} className={classes} style={style} loading="lazy" draggable={false} />
+    <img
+      src={src}
+      alt={alt}
+      className={`${classes} bg-[var(--color-surface-2)] transition-opacity duration-200`}
+      style={style}
+      loading="lazy"
+      draggable={false}
+      onError={() => setFailedSource(src)}
+    />
   );
 }
 

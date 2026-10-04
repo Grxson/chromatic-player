@@ -14,8 +14,11 @@ import { useRouter } from "@/app/router/useRouter";
 import { isViewKey } from "@/app/router/router";
 import type { Route } from "@/app/router/router";
 import { usePlayerStore } from "@/stores/player.store";
+import { useAuthStore } from "@/stores/auth.store";
 import { useChromaticTheme } from "@/features/chromatic";
 import { usePlayerShortcuts } from "@/hooks/usePlayerShortcuts";
+import { Content } from "@/components/layout/Content";
+import { Header } from "@/components/layout/Header";
 
 const VIEW_PAGES: Record<ViewKey, () => React.JSX.Element> = {
   home: HomePage,
@@ -27,6 +30,7 @@ const VIEW_PAGES: Record<ViewKey, () => React.JSX.Element> = {
 export function App() {
   const { route, navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
+  const authStatus = useAuthStore((state) => state.status);
 
   // Apply the chromatic theme variables whenever the playing track changes.
   useChromaticTheme(currentTrack?.album?.id ?? null);
@@ -53,7 +57,9 @@ export function App() {
   const view: ViewKey = route.type === "view" && isViewKey(route.view) ? route.view : "home";
 
   const body =
-    route.type === "view" ? (
+    authStatus === "initializing" ? (
+      <AuthLoadingPage />
+    ) : route.type === "view" ? (
       renderView(view)
     ) : route.type === "album" ? (
       <AlbumPage albumId={route.id} />
@@ -91,6 +97,23 @@ export function App() {
       {body}
       <QueueDrawer open={queueOpen} onClose={closeQueue} />
     </AppShell>
+  );
+}
+
+function AuthLoadingPage() {
+  return (
+    <>
+      <Header title="Connecting to TIDAL" subtitle="Restoring your catalogue session…" />
+      <Content>
+        <div
+          role="status"
+          aria-label="Loading TIDAL session"
+          className="flex min-h-48 items-center justify-center text-sm text-[var(--color-text-secondary)]"
+        >
+          Connecting to TIDAL…
+        </div>
+      </Content>
+    </>
   );
 }
 

@@ -1,4 +1,6 @@
 export { useAsyncResource } from "./useAsyncResource";
+export { useAlbumPlayback } from "./useAlbumPlayback";
+export type { AlbumPlaybackController } from "./useAlbumPlayback";
 export type { AsyncResource, AsyncStatus } from "./useAsyncResource";
 export { useMotionPreference } from "./useMotionPreference";
 export type { MotionPreference } from "./useMotionPreference";

@@ -96,17 +96,34 @@ export class TidalCatalogProvider implements MusicCatalogProvider {
       included,
     );
 
+    const tracks = orderedResources(included, "tracks", trackIds)
+      .slice(0, limit)
+      .map((item) => mapTrack(item, included));
+    const albums = orderedResources(included, "albums", albumIds)
+      .slice(0, limit)
+      .map((item) => mapAlbum(item, included));
+    const artists = orderedResources(included, "artists", artistIds)
+      .slice(0, limit)
+      .map((item) => mapArtist(item, included));
+    const albumArtists = new Map(
+      tracks.flatMap((track) =>
+        track.album ? [[track.album.id, track.album.artists] as const] : [],
+      ),
+    );
+    const soleSearchArtist = artists.length === 1 ? artists : [];
+
     return {
       query,
-      tracks: orderedResources(included, "tracks", trackIds)
-        .slice(0, limit)
-        .map((item) => mapTrack(item, included)),
-      albums: orderedResources(included, "albums", albumIds)
-        .slice(0, limit)
-        .map((item) => mapAlbum(item, included)),
-      artists: orderedResources(included, "artists", artistIds)
-        .slice(0, limit)
-        .map((item) => mapArtist(item, included)),
+      tracks,
+      albums: albums.map((album) =>
+        album.artists.length > 0
+          ? album
+          : {
+              ...album,
+              artists: albumArtists.get(album.id) ?? soleSearchArtist,
+            },
+      ),
+      artists,
       playlists: orderedResources(included, "playlists", playlistIds)
         .slice(0, limit)
         .map((item) => mapPlaylist(item, included)),
@@ -174,7 +191,14 @@ export class TidalCatalogProvider implements MusicCatalogProvider {
     const document = requireData(data, error);
     const included = (document.included ?? []) as Included;
     const albumIds = relationIds(document.data.relationships?.albums?.data, "albums");
-    return orderedResources(included, "albums", albumIds).map((item) => mapAlbum(item, included));
+    const artist = mapArtist(
+      document.data as components["schemas"]["Artists_Resource_Object"],
+      included,
+    );
+    return orderedResources(included, "albums", albumIds).map((item) => {
+      const album = mapAlbum(item, included);
+      return album.artists.length > 0 ? album : { ...album, artists: [artist] };
+    });
   }
 
   async getPlaylistTracks(playlistId: string): Promise<Track[]> {

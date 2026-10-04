@@ -80,14 +80,16 @@ export function mapTrack(resource: TidalTrack, included: Included = []): Track {
   const artists = artistsFor(relationshipIds(relationships?.artists?.data, "artists"), included);
   const albums = albumsFor(relationshipIds(relationships?.albums?.data, "albums"), included);
   const album = albums[0];
+  const albumWithArtists =
+    album && album.artists.length === 0 && artists.length > 0 ? { ...album, artists } : album;
   const attributes = resource.attributes;
   return {
     id: String(resource.id),
     title: attributes?.title ?? "Untitled track",
     duration: parseDuration(attributes?.duration),
-    artist: artists[0] ?? album?.artists[0] ?? { id: "unknown", name: "Unknown artist" },
-    ...(album ? { album } : {}),
-    artworkUrl: album?.artworkUrl,
+    artist: artists[0] ?? albumWithArtists?.artists[0] ?? { id: "unknown", name: "Unknown artist" },
+    ...(albumWithArtists ? { album: albumWithArtists } : {}),
+    artworkUrl: albumWithArtists?.artworkUrl,
     explicit: attributes?.explicit,
   };
 }

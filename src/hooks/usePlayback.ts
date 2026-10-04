@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { Track } from "@/domain/entities";
+import type { PlaybackSource, Track } from "@/domain/entities";
 import { usePlaybackBackend } from "@/app/providers/useMusicProvider";
 import { usePlayerStore } from "@/stores/player.store";
 import { useQueueStore } from "@/stores/queue.store";
@@ -18,7 +18,7 @@ export interface PlaybackController {
   playTrack: (track: Track) => Promise<void>;
 
   /** Contextual playback. Replaces the queue with `tracks` and starts at `startIndex`. */
-  playQueue: (tracks: Track[], startIndex: number) => Promise<void>;
+  playQueue: (tracks: Track[], startIndex: number, source?: PlaybackSource) => Promise<void>;
 
   /** Jumps to the track at the given index in the current queue and plays it. */
   playQueueIndex: (index: number) => Promise<void>;
@@ -158,8 +158,11 @@ async function replaceQueueAndLoad(
   deps: {
     provider: ReturnType<typeof usePlaybackBackend>;
   },
+  setQueueSource: (source: PlaybackSource | null) => void,
+  source: PlaybackSource | null = null,
 ): Promise<void> {
   enqueueQueue(tracks);
+  setQueueSource(source ?? null);
   const track = jumpTo(startIndex);
   if (!track) {
     return;
@@ -199,12 +202,13 @@ export function usePlayback(): PlaybackController {
   const removeAt = useQueueStore((state) => state.removeAt);
   const clearQueueStore = useQueueStore((state) => state.clear);
   const getCurrentTrack = useQueueStore((state) => state.getCurrentTrack);
+  const setQueueSource = useQueueStore((state) => state.setSource);
 
   const playTrack = useCallback(
     async (track: Track) => {
-      await replaceQueueAndLoad([track], 0, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad([track], 0, enqueueQueue, jumpTo, { provider }, setQueueSource);
     },
-    [enqueueQueue, jumpTo, provider],
+    [enqueueQueue, jumpTo, provider, setQueueSource],
   );
 
   const playTracks = useCallback(
@@ -212,20 +216,28 @@ export function usePlayback(): PlaybackController {
       if (tracks.length === 0) {
         return;
       }
-      await replaceQueueAndLoad(tracks, 0, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad(tracks, 0, enqueueQueue, jumpTo, { provider }, setQueueSource);
     },
-    [enqueueQueue, jumpTo, provider],
+    [enqueueQueue, jumpTo, provider, setQueueSource],
   );
 
   const playQueue = useCallback(
-    async (tracks: Track[], startIndex: number) => {
+    async (tracks: Track[], startIndex: number, source?: PlaybackSource) => {
       if (tracks.length === 0) {
         return;
       }
       const safeIndex = Math.min(Math.max(0, startIndex), tracks.length - 1);
-      await replaceQueueAndLoad(tracks, safeIndex, enqueueQueue, jumpTo, { provider });
+      await replaceQueueAndLoad(
+        tracks,
+        safeIndex,
+        enqueueQueue,
+        jumpTo,
+        { provider },
+        setQueueSource,
+        source,
+      );
     },
-    [enqueueQueue, jumpTo, provider],
+    [enqueueQueue, jumpTo, provider, setQueueSource],
   );
 
   const playQueueIndex = useCallback(

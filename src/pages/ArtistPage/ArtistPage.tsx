@@ -11,6 +11,7 @@ import { Spinner } from "@/components/common/Spinner";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useCatalogProvider } from "@/app/providers/useMusicProvider";
 import { usePlayback } from "@/hooks/usePlayback";
+import { useAlbumPlayback } from "@/hooks/useAlbumPlayback";
 import { useRouter } from "@/app/router/useRouter";
 import { usePlayerStore } from "@/stores/player.store";
 
@@ -27,6 +28,7 @@ interface ArtistData {
 export function ArtistPage({ artistId }: ArtistPageProps) {
   const provider = useCatalogProvider();
   const playback = usePlayback();
+  const albumPlayback = useAlbumPlayback();
   const { navigate } = useRouter();
   const currentTrack = usePlayerStore((state) => state.currentTrack);
   const status = usePlayerStore((state) => state.status);
@@ -125,6 +127,12 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
           </div>
         </div>
 
+        {provider.name === "tidal-catalog" ? (
+          <p className="mt-6 text-xs text-[var(--color-text-muted)]">
+            TIDAL catalogue metadata is live; playback currently uses the mock backend.
+          </p>
+        ) : null}
+
         <div className="mt-12 space-y-12">
           {tracks.length > 0 ? (
             <section>
@@ -153,7 +161,7 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
               <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                 Albums
               </h3>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-x-5 gap-y-8">
                 {albums.map((album) => (
                   <AlbumCard
                     key={album.id}
@@ -161,9 +169,16 @@ export function ArtistPage({ artistId }: ArtistPageProps) {
                     onOpen={(a) => {
                       navigate({ type: "album", id: a.id });
                     }}
+                    onPlay={(a) => void albumPlayback.playAlbum(a)}
+                    isLoading={albumPlayback.loadingAlbumId === album.id}
                   />
                 ))}
               </div>
+              {albumPlayback.error ? (
+                <p role="alert" className="mt-4 text-sm text-[var(--color-text-secondary)]">
+                  {albumPlayback.error}
+                </p>
+              ) : null}
             </section>
           ) : null}
         </div>

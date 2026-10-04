@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feat/tidal-alpha1-foundation]
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -283,9 +283,10 @@ export function usePlayback(): PlaybackController {
 
       // Queue is now empty. Pause the provider, reset the player.
       try {
-        await provider.pause();
+        if (provider.stop) await provider.stop();
+        else await provider.pause();
       } catch (err) {
-        console.error("removeFromQueue pause failed", err);
+        console.error("removeFromQueue stop failed", err);
       }
       if (!isCurrentTransitionOperation(operationId)) return;
       setCurrentTrack(null);
@@ -303,9 +304,10 @@ export function usePlayback(): PlaybackController {
     clearQueueStore();
     if (snapshot.track) {
       try {
-        await provider.pause();
+        if (provider.stop) await provider.stop();
+        else await provider.pause();
       } catch {
-        /* ignore — provider pause failure should not block UI cleanup */
+        /* ignore — stopping audio should not block queue cleanup */
       }
     }
     if (!isCurrentTransitionOperation(operationId)) return;

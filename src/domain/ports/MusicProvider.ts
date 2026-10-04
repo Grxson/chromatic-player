@@ -22,6 +22,14 @@ export interface MusicCatalogProvider {
   getPlaylistTracks(playlistId: string): Promise<Track[]>;
 }
 
+/** Playback event emitted by observable backends when media state changes. */
+export interface PlaybackEvent {
+  type: "timeupdate" | "durationchange" | "ended" | "play" | "pause" | "error";
+  position?: number;
+  duration?: number;
+  error?: string;
+}
+
 /** Playback backend for one track at a time; it never owns the queue. */
 export interface PlaybackBackend {
   play(track: Track): Promise<void>;
@@ -29,6 +37,8 @@ export interface PlaybackBackend {
   resume(): Promise<void>;
   seek(position: number): Promise<void>;
   setVolume(volume: number): Promise<void>;
+  subscribe?(listener: (event: PlaybackEvent) => void): () => void;
+  stop?(): Promise<void>;
 }
 
 /** Observable authentication state. Credentials remain inside infrastructure. */

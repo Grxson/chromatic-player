@@ -9,6 +9,9 @@ import { MockAuthProvider } from "@/infrastructure/mock/MockAuthProvider";
 import { MockMusicProvider } from "@/infrastructure/mock/MockMusicProvider";
 import { TidalAuthProvider } from "@/infrastructure/tidal/auth/TidalAuthProvider";
 import { TidalCatalogProvider } from "@/infrastructure/tidal/api/TidalCatalogProvider";
+import { LocalPlaybackBackend } from "@/infrastructure/local/LocalPlaybackBackend";
+import { useLocalLibraryStore } from "@/stores/localLibrary.store";
+import { PlaybackEventBridge } from "./PlaybackEventBridge";
 import {
   MusicAuthContext,
   MusicCatalogContext,
@@ -44,11 +47,15 @@ export function MusicProviderProvider({
     [],
   );
   const tidalCatalog = useMemo(() => new TidalCatalogProvider(), []);
+  const localPlayback = useMemo(
+    () => new LocalPlaybackBackend((ref) => useLocalLibraryStore.getState().sources[ref]),
+    [],
+  );
 
   const legacyProvider = provider ?? mock;
   const catalog =
     catalogProvider ?? (provider ? provider : source === "tidal" ? tidalCatalog : mock);
-  const playback = playbackBackend ?? provider ?? mock;
+  const playback = playbackBackend ?? provider ?? (source === "tidal" ? localPlayback : mock);
   const mockAuth = useMemo(() => new MockAuthProvider(), []);
   const auth = authProvider ?? (source === "tidal" ? tidalAuth : mockAuth);
 
@@ -60,7 +67,9 @@ export function MusicProviderProvider({
     <MusicProviderContext.Provider value={{ provider: legacyProvider }}>
       <MusicCatalogContext.Provider value={catalog}>
         <PlaybackBackendContext.Provider value={playback}>
-          <MusicAuthContext.Provider value={auth}>{children}</MusicAuthContext.Provider>
+          <MusicAuthContext.Provider value={auth}>
+            <PlaybackEventBridge>{children}</PlaybackEventBridge>
+          </MusicAuthContext.Provider>
         </PlaybackBackendContext.Provider>
       </MusicCatalogContext.Provider>
     </MusicProviderContext.Provider>

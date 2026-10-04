@@ -4,5 +4,6 @@ export type {
   MusicCatalogProvider,
   MusicProvider,
   PlaybackBackend,
+  PlaybackEvent,
   SearchResult,
 } from "./MusicProvider";

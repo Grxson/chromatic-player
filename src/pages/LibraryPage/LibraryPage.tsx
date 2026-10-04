@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Heart, Library } from "lucide-react";
+import { Heart, Library, Plus } from "lucide-react";
 import { Content } from "@/components/layout/Content";
 import { Header } from "@/components/layout/Header";
 import { TrackRow } from "@/components/music/TrackRow";
@@ -15,9 +15,11 @@ import { useRouter } from "@/app/router/useRouter";
 import { useLibraryStore } from "@/stores/library.store";
 import { usePlayerStore } from "@/stores/player.store";
 import { cn } from "@/utils/cn";
+import { mapLocalFile } from "@/infrastructure/local/localTrack";
+import { useLocalLibraryStore } from "@/stores/localLibrary.store";
 import type { Album, Artist, Playlist, Track } from "@/domain/entities";
 
-type Tab = "tracks" | "albums" | "artists" | "playlists";
+type Tab = "local" | "tracks" | "albums" | "artists" | "playlists";
 
 interface LibraryData {
   tracks: Track[];
@@ -27,6 +29,7 @@ interface LibraryData {
 }
 
 const TABS: { key: Tab; label: string }[] = [
+  { key: "local", label: "Local music" },
   { key: "tracks", label: "Tracks" },
   { key: "albums", label: "Albums" },
   { key: "artists", label: "Artists" },
@@ -50,6 +53,8 @@ export function LibraryPage() {
   const likedTrackIds = useLibraryStore((state) => state.likedTrackIds);
   const savedAlbumIds = useLibraryStore((state) => state.savedAlbumIds);
   const followedArtistIds = useLibraryStore((state) => state.followedArtistIds);
+  const localTracks = useLocalLibraryStore((state) => state.tracks);
+  const addImported = useLocalLibraryStore((state) => state.addImported);
 
   const loader = useCallback(() => loadLibrary(provider), [provider]);
   const { status: loadStatus, data } = useAsyncResource<LibraryData>("library", loader);
@@ -70,9 +75,12 @@ export function LibraryPage() {
   );
   const playlists = all.playlists;
 
-  const [tab, setTab] = useState<Tab>("tracks");
+  const [tab, setTab] = useState<Tab>("local");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const counts = {
+    local: localTracks.length,
     tracks: likedTrackIds.length,
     albums: savedAlbumIds.length,
     artists: followedArtistIds.length,
@@ -86,7 +94,7 @@ export function LibraryPage() {
       <Header
         eyebrow="Your collection"
         title="Library"
-        subtitle="Liked tracks, saved albums and followed artists."
+        subtitle="Your local music alongside saved TIDAL albums and artists."
       />
       <Content>
         <div className="space-y-8">
@@ -118,6 +126,83 @@ export function LibraryPage() {
               </button>
             ))}
           </div>
+
+          {tab === "local" ? (
+            <section aria-label="Local music" className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-sm font-medium text-[var(--color-text-primary)]">
+                    Local tracks
+                  </h2>
+                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                    Files stay on this device and are available for this session.
+                  </p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-2)]">
+                  <Plus size={15} aria-hidden="true" />
+                  {isImporting ? "Adding…" : "Add files"}
+                  <input
+                    type="file"
+                    multiple
+                    accept=".mp3,.flac,.wav,.m4a,.aac,.ogg,audio/*"
+                    disabled={isImporting}
+                    className="sr-only"
+                    aria-label="Add local audio files"
+                    onChange={(event) => {
+                      const files = Array.from(event.currentTarget.files ?? []);
+                      event.currentTarget.value = "";
+                      if (files.length === 0) return;
+                      setIsImporting(true);
+                      setImportMessage(null);
+                      void (async () => {
+                        const imported = [];
+                        let failed = 0;
+                        for (const file of files) {
+                          try {
+                            imported.push(await mapLocalFile(file));
+                          } catch {
+                            failed += 1;
+                          }
+                        }
+                        addImported(imported);
+                        setImportMessage(
+                          failed > 0
+                            ? `${imported.length} added · ${failed} file${failed === 1 ? "" : "s"} could not be read.`
+                            : `${imported.length} track${imported.length === 1 ? "" : "s"} added.`,
+                        );
+                        setIsImporting(false);
+                      })();
+                    }}
+                  />
+                </label>
+              </div>
+              {importMessage ? (
+                <p role="status" className="text-xs text-[var(--color-text-secondary)]">
+                  {importMessage}
+                </p>
+              ) : null}
+              {localTracks.length === 0 ? (
+                <EmptyState
+                  icon={<Library size={20} aria-hidden="true" />}
+                  title="Your local library is empty"
+                  description="Choose audio files from your device to start listening."
+                />
+              ) : (
+                <div className="space-y-1">
+                  {localTracks.map((track, index) => (
+                    <TrackRow
+                      key={track.id}
+                      track={track}
+                      index={index}
+                      isCurrent={currentTrack?.id === track.id}
+                      isPlaying={status === "playing" && currentTrack?.id === track.id}
+                      onPlay={() => void playback.playQueue(localTracks, index)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {tab === "tracks" ? (
             loading ? (

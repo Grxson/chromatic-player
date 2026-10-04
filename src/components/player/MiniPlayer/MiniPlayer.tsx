@@ -27,6 +27,7 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
   const position = usePlayerStore((state) => state.position);
   const duration = usePlayerStore((state) => state.duration);
   const volume = usePlayerStore((state) => state.volume);
+  const playbackError = usePlayerStore((state) => state.error);
 
   const queueLength = useQueueStore((state) => state.tracks.length);
 
@@ -42,7 +43,12 @@ export function MiniPlayer({ onExpand, onOpenQueue }: MiniPlayerProps) {
       data-state={status}
     >
       <div className="flex items-center gap-5">
-        <NowPlaying track={currentTrack} status={status} isPlaying={isPlaying} />
+        <NowPlaying
+          track={currentTrack}
+          status={status}
+          isPlaying={isPlaying}
+          error={playbackError}
+        />
         <PlayerControls
           isPlaying={isPlaying}
           disabled={!hasTrack}
@@ -94,6 +100,7 @@ interface NowPlayingProps {
   track: Track | null;
   status: ReturnType<typeof usePlayerStore.getState>["status"];
   isPlaying: boolean;
+  error: string | null;
 }
 
 /**
@@ -102,7 +109,7 @@ interface NowPlayingProps {
  * small spinner affordance later, `paused` falls back to primary text,
  * `error` shows a subtle danger hint, and `idle` shows neutral text.
  */
-function NowPlaying({ track, status, isPlaying }: NowPlayingProps) {
+function NowPlaying({ track, status, isPlaying, error }: NowPlayingProps) {
   if (!track) {
     return (
       <div className="flex min-w-0 items-center gap-3">
@@ -139,8 +146,15 @@ function NowPlaying({ track, status, isPlaying }: NowPlayingProps) {
       />
       <div className="flex min-w-0 flex-col leading-tight">
         <span className={titleClass}>{track.title}</span>
-        <span className="truncate text-xs text-[var(--color-text-secondary)]">
-          {track.artist.name}
+        <span
+          className={cn(
+            "truncate text-xs",
+            status === "error"
+              ? "text-[var(--color-danger)]"
+              : "text-[var(--color-text-secondary)]",
+          )}
+        >
+          {status === "error" ? (error ?? "Playback unavailable") : track.artist.name}
         </span>
       </div>
     </div>

@@ -14,6 +14,8 @@ export interface Track {
   artist: Artist;
   album?: Album;
   artworkUrl?: string;
+  /** Opaque reference resolved by the active playback backend, never a raw file path. */
+  playbackRef?: string;
   /** ISO 639-1 language hint when available. */
   language?: string;
   /** Provider-specific flags surfaced for the UI. */
